@@ -166,6 +166,9 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     observations=observations,
                     rewrites_used=attempt,
                     releases=package.releases,
+                    # 锁定文案只透传不生产：本域要挂哪几条由求值线随包给定（规则 2.4 零生成），
+                    # 单元把它交给装配层去挂——写作器全程不知道有这回事。
+                    required_locked_texts=sorted(package.locked_texts_by_domain.get(domain, [])),
                 ).model_dump()
             feedback = [
                 Violation(check=o.check, detail=f"判官命中「{o.quote}」：{o.why}") for o in blocked
@@ -175,7 +178,13 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
 
 @activity.defn(name="report-page-assemble")
 async def assemble_report_pages(request: PageAssembleRequest) -> ActivityResult:
-    """页面装配（确定性，唯一知道"页"的节点）：首版按域成页；pt- 页型库编译后接管 page_type。"""
+    """页面装配（确定性，唯一知道"页"的节点）：首版按域成页；pt- 页型库编译后接管 page_type。
+
+    **锁定文案在此挂载**（规则 2.4 gen-locked：引用 ID 直接渲染、零生成）：装配层按产物要求把
+    ID 挂上页，不拼接正文、不选择挂哪条——要挂哪几条是求值线的裁决，随包下发经单元透传到这里。
+    挂载与校验分层（挂在装配、验在册级）不是重复：册级读的是数据包这个独立来源，两边不一致
+    才报得出"该挂没挂"，装配自验自己等于什么都没验。
+    """
     failed_units = [u for u in request.units if u.verdict != "ok"]
     if failed_units:
         return PageAssembleResult(
@@ -186,7 +195,12 @@ async def assemble_report_pages(request: PageAssembleRequest) -> ActivityResult:
             ],
         ).model_dump()
     pages = [
-        Page(page_id=f"page-{unit.domain}", domain=unit.domain, cards=unit.cards)
+        Page(
+            page_id=f"page-{unit.domain}",
+            domain=unit.domain,
+            cards=unit.cards,
+            locked_text_ids=list(unit.required_locked_texts),
+        )
         for unit in sorted(request.units, key=lambda u: u.domain)
     ]
     return PageAssembleResult(verdict="ok", pages=pages).model_dump()
@@ -194,8 +208,15 @@ async def assemble_report_pages(request: PageAssembleRequest) -> ActivityResult:
 
 @activity.defn(name="report-book-check")
 async def check_report_book(request: BookCheckRequest) -> ActivityResult:
-    """册级校验（渲染前）：首版为结构完整性——域齐/页非空/全册数字引用可解析；
-    册级 cr-（branch-cap/set-closure/promise-fulfilled…）随 release 判据编译后物化执行。"""
+    """册级校验（渲染前）：首版为结构完整性——域齐/页非空/全册数字引用可解析/**锁定文案齐**；
+    册级 cr-（branch-cap/set-closure/promise-fulfilled…）随 release 判据编译后物化执行。
+
+    锁定文案齐不齐是**确定性**校验，故落规则层不落判官层：要求集在数据包（``locked_texts_by_domain``），
+    挂载集在页上，两个集合一比即可判——规则 5.15"DISCLAIM_PRICE 必挂"这类条文此前在成文线是空文，
+    因为既没有 ID 枚举也没有载体。注：包内 ``checks`` 里的 ``presence_require`` 判据（如
+    ``cr-budget-disclaimer``）**不在此层执行**：它的 ``requirement`` 是给人读的自然语言，
+    从中抠 ID 等于发明一套表达式语法（禁止项）；要挂哪条以数据包的锁定清单为唯一口径。
+    """
     violations: list[Violation] = []
     page_domains = [p.domain for p in request.pages]
     if len(set(page_domains)) != len(page_domains):
@@ -210,6 +231,19 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
     for page in request.pages:
         if not page.cards:
             violations.append(Violation(check="gate-empty-page", detail=f"{page.page_id} 空页"))
+        mounted = set(page.locked_text_ids)
+        required = sorted(request.package.locked_texts_by_domain.get(page.domain, []))
+        missing = [t for t in required if t not in mounted]
+        if missing:
+            violations.append(
+                Violation(
+                    check="gate-locked-text-missing",
+                    detail=(
+                        f"{page.page_id} 缺锁定文案 {missing}——本产物要求必挂"
+                        "（规范 §7 锁定文案全集；造价章即规则 5.15 的 DISCLAIM_PRICE 必挂）"
+                    ),
+                )
+            )
         for card in page.cards:
             for ref in card.number_refs:
                 # 隐藏落点的最后一道：单元级已拦，册级再拦一次（渲染前是最后能停下来的地方）

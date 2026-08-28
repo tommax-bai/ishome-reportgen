@@ -61,7 +61,37 @@ PACKAGE_JSON: dict[str, Any] = {
             {
                 "assetId": "persona-ergonomics",
                 "identity": "你在为这一家人校核他们家的尺寸。",
-                "judgmentSamples": [],
+                # persona 四件之②（规则 4.13）：好/坏对照句对。reason 是 cr- 编号——只给判官层，
+                # 不下发给写作器（业主语域里没有编号）。后两条形态不合：损坏条目归核验跑批，
+                # 运行时静默跳过不兜底（同 assertionBudget 的既有写法）。
+                "judgmentSamples": [
+                    # 两句都自己过得了机检 → 下发
+                    {
+                        "bad": "根据人体工程学原理，台面高度宜设定为标准值。",
+                        "good": "台面做到这个高度，你切菜时手腕是平的，不用弓腰。",
+                        "reason": "cr-methodology-language",
+                    },
+                    {"bad": "主通道净宽建议不小于标准值。", "reason": "cr-weak-word"},
+                    "整条不是对象",
+                    # 正例自己违反数字纪律（样例编译早于该纪律）：照着写就是照着违规
+                    {
+                        "bad": "衣柜挂杆高度按身高折算，符合取物高度。",
+                        "good": "挂杆按你的身高定在 1200 这个高度，抬手就够得着。",
+                        "reason": "cr-unit-translation",
+                    },
+                    # 反例带数字也丢：真跑实证模型连反例里的裸数字一并照抄
+                    {
+                        "bad": "餐厅吊灯下沿距桌面700-800mm。",
+                        "good": "那盏灯吊到坐下来抬头不刺眼、起身不撞头的高度。",
+                        "reason": "cr-unit-translation",
+                    },
+                    # 反例带禁词是它的本职，但禁词零容忍——摆进上下文换不来等价示范价值
+                    {
+                        "bad": "综合考量后，台面高度取中位值。",
+                        "good": "台面按主厨的身体定，不取平均值。",
+                        "reason": "cr-methodology-language",
+                    },
+                ],
                 "assertionBudget": [
                     # 背书得起：requires 全部已求值且非降档
                     {"predicate": "通道净宽是否够", "requires": ["lkp-passage-main"]},
@@ -133,6 +163,9 @@ PACKAGE_JSON: dict[str, Any] = {
         ],
     },
     "bannedTermsByDomain": {"ergonomics": ["依据", "综合考量"], "lighting": ["依据"]},
+    # 锁定清单（图 v0.2 §2）：dom-lighting 的主产物含 art-ceiling-lighting-plan（prec-schematic），
+    # 图框必挂 DISCLAIM_P1（规范 §7 + 规则 2.1）；ergonomics 本轮无必挂文案 → 键缺席即无要求。
+    "lockedTextsByDomain": {"lighting": ["DISCLAIM_P1"]},
     "anonymousProfile": {
         "chiefHeightMm": 1700,
         "tallestHeightMm": 1780,

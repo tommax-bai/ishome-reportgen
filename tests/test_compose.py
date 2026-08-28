@@ -31,6 +31,11 @@ GOOD_CARD = Card(
     number_refs=["lkp-counter-height"],
 )
 BAD_CARD = Card(thesis="台面高做九百。", body="就是 900mm，综合考量后定的。", number_refs=[])
+LIGHTING_CARD = Card(
+    thesis="起居室的亮度按人在这儿做什么来分层。",
+    body="沙发那片区域锚在 {lkp-illuminance-living}。",
+    number_refs=["lkp-illuminance-living"],
+)
 
 
 class ScriptedWriter:
@@ -121,14 +126,9 @@ async def test_assemble_and_book_check() -> None:
     lighting_unit = UnitComposeResult(
         verdict="ok",
         domain="lighting",
-        cards=[
-            Card(
-                thesis="灯光按人的活动分层。",
-                body="起居室照度锚在 {lkp-illuminance-living}。",
-                number_refs=["lkp-illuminance-living"],
-            )
-        ],
+        cards=[LIGHTING_CARD],
         releases=ok_unit.releases,
+        required_locked_texts=["DISCLAIM_P1"],
     )
     assembled = PageAssembleResult.model_validate(
         await activities.assemble_report_pages(PageAssembleRequest(units=[lighting_unit, ok_unit]))
@@ -140,6 +140,65 @@ async def test_assemble_and_book_check() -> None:
         await activities.check_report_book(BookCheckRequest(pages=assembled.pages, package=PACKAGE))
     )
     assert book.verdict == "ok"
+
+
+async def test_locked_texts_mounted_by_assembly_not_by_writer() -> None:
+    """gen-locked 挂载链路（规则 2.4/5.15）：要求随包 → 单元透传 → **装配层挂上页** → 册级验齐。
+
+    写作器全程不参与：卡片上没有放它的位置，模型也没被告知有这回事（见 test_writer_prompt）。
+    """
+    ergonomics_unit = await compose(ScriptedWriter([[GOOD_CARD]]))
+    assert ergonomics_unit.required_locked_texts == []  # 本域无必挂文案
+
+    lighting_unit = await compose(ScriptedWriter([[LIGHTING_CARD]]), domain="lighting")
+    assert lighting_unit.required_locked_texts == ["DISCLAIM_P1"]
+
+    assembled = PageAssembleResult.model_validate(
+        await activities.assemble_report_pages(
+            PageAssembleRequest(units=[lighting_unit, ergonomics_unit])
+        )
+    )
+    mounted = {p.domain: p.locked_text_ids for p in assembled.pages}
+    assert mounted == {"ergonomics": [], "lighting": ["DISCLAIM_P1"]}
+
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=assembled.pages, package=PACKAGE))
+    )
+    assert book.verdict == "ok"
+
+
+async def test_book_check_reports_missing_locked_text() -> None:
+    """册级确定性校验：产物要求的锁定文案没挂上 → 渲染前拦住（规则 5.15 "必挂"此前是空文）。"""
+    pages = [
+        Page(page_id="page-ergonomics", domain="ergonomics", cards=[GOOD_CARD]),
+        Page(page_id="page-lighting", domain="lighting", cards=[LIGHTING_CARD]),  # 漏挂
+    ]
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=pages, package=PACKAGE))
+    )
+    assert book.verdict == "failed"
+    missing = [v for v in book.violations if v.check == "gate-locked-text-missing"]
+    assert len(missing) == 1
+    assert "DISCLAIM_P1" in missing[0].detail
+
+
+async def test_package_without_locked_texts_requires_none() -> None:
+    """旧包（生产方未升级）缺省空 = 无要求，不误判——宽进；该挂没挂由上面那条严查。"""
+    legacy = copy.deepcopy(PACKAGE_JSON)
+    legacy.pop("lockedTextsByDomain")
+    package = ReportDataPackage.model_validate(legacy)
+    unit = await compose(ScriptedWriter([[LIGHTING_CARD]]), domain="lighting", package=package)
+
+    assert unit.required_locked_texts == []
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(
+            BookCheckRequest(
+                pages=[Page(page_id="page-lighting", domain="lighting", cards=[LIGHTING_CARD])],
+                package=package,
+            )
+        )
+    )
+    assert "gate-locked-text-missing" not in {v.check for v in book.violations}
 
 
 async def test_package_gate_fails_before_calling_writer() -> None:

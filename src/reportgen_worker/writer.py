@@ -10,6 +10,11 @@ prompt 只从报告数据包内的 persona 载荷与落点对象拼装——运�
 prompt 只是第一道，**不是门禁**——真正拦截在 :mod:`reportgen_worker.gate`
 （判据下沉次序 schema > 规则 > prompt > 判官，图 v0.2 §3）。被隐藏的落点不进 prompt：
 它们的 id 与名称一并不下发，写作器无从提起。
+
+persona 四件（规则 4.13）在本仓的消费面已齐：①身份语域=system 头；②**判断句风格样例**=本模块
+:func:`judgment_pairs`（好/坏对照句对，唯一以"示范"形态进 prompt 的判据）；③断言预算与
+④禁词表在 :mod:`reportgen_worker.gate`（预算切两张清单进 prompt，禁词双消费=prompt 约束
++ 机检扫描，规则 4.15）。
 """
 
 from __future__ import annotations
@@ -17,11 +22,18 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Sequence
 from typing import Protocol
 
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
+from reportgen_worker.gate import (
+    BARE_LKP_RE,
+    CHINESE_NUMBER_RE,
+    DIGIT_RE,
+    PLACEHOLDER_RE,
+)
 from reportgen_worker.models import (
     Card,
     EvaluationProfile,
@@ -59,10 +71,95 @@ class CardWriter(Protocol):
     async def write(self, request: WriterRequest) -> list[Card]: ...
 
 
+def _writes_numbers(text: str) -> bool:
+    """样例正文是否自己就违反数字纪律（口径逐字同 gate：先剥占位符，再查三种写数形态）。"""
+    stripped = PLACEHOLDER_RE.sub("", text)
+    return bool(
+        DIGIT_RE.search(stripped)
+        or CHINESE_NUMBER_RE.search(stripped)
+        or BARE_LKP_RE.search(stripped)
+    )
+
+
+def _self_violating(text: str, banned_terms: Sequence[str]) -> bool:
+    """这句示范自己过不过得了机检（数字纪律 + 禁词，两处口径都取自 gate 的同一份实现）。"""
+    return _writes_numbers(text) or any(term in text for term in banned_terms)
+
+
+def judgment_pairs(
+    persona: PersonaAsset, banned_terms: Sequence[str] = ()
+) -> list[tuple[str, str]]:
+    """persona 四件之②：判断句风格样例（好/坏对照句对，规则 4.13）。
+
+    **``reason`` 被刻意丢掉**：它是 cr- 判据编号，业主语域里没有编号，写作器也不需要认识判据
+    编号——它只需要看会不会写。要编号的是判官层（只报编号不改写，:mod:`reportgen_worker.judge`），
+    两层各拿各的那一半，样例不因此变成第二套判据下发。
+
+    形态不合的条目**静默跳过**（同 :func:`reportgen_worker.gate.assertion_budget` 的既有写法）：
+    样例是 release 数据，损坏条目归资产回路的核验跑批，运行时不替它兜底、更不因此拒绝成文——
+    persona 少一条示范只是写得差一点，不是发不出。
+
+    **一对里两句都必须自己过得了机检**，任一句脏则整对不下发。判据对称不是洁癖，是四轮 A/B
+    量出来的（2026-08-28 真跑，budget+lighting 各 3 跑，同一份真实数据包，唯一变量是示范块）：
+
+    ====== =================== ======== ========= =========
+    轮次   过滤规则            下发对数 示范开    示范关
+    ====== =================== ======== ========= =========
+    一      只滤 ✓（✗ 原样）    十九       0/6       3/6
+    二      **两侧对称**          四       3/6       4/6
+    三      滤 ✓、✗ 脏则只丢 ✗   十三       0/6       6/6
+    四      **两侧对称**          四       4/6       2/6
+    ====== =================== ======== ========= =========
+
+    半过滤的两轮方向一致且极端：**prompt 里的示范句越多，过检率越低**，机制在
+    ``gate-sample-verbatim-copy``——模型把 ✓ 逐字抄进卡片当结论（第三轮 budget 三跑全中）。
+    示范句是完整、好看、可独立成立的句子，照抄它比自己写省力，而抄来的话既与这家人无关也没有
+    落点背书。第一轮的 ✗ 侧同理：`餐厅吊灯下沿距桌面700-800mm。` 这类反例把裸数字带进正文，
+    模型不区分那句挂的是对钩还是叉。
+
+    第三轮是**为保样本量特意试的非对称规则**（✗ 脏只丢 ✗、留下干净的 ✓，十九对里可留十三对、
+    六域无一归零），结果比对称规则更差：样本量不是这里的稀缺资源，可抄性才是代价。留四对。
+
+    对称规则本身（二、四轮合计 ON 7/12 : OFF 6/12）**在过检率上与关闭无显著差别**——照实记：
+    OFF 单轮在 2/6 到 6/6 间摆动，每格 6 跑量不出这个量级的差异，不要拿它当"示范有效"的证据。
+    留着它的理由是语域（真跑里 ON 的卡片明显更像在跟这家人说话），不是过检率；而非对称/无过滤
+    的 0/12 是确定的有害，两者不可混为一谈。
+
+    丢弃是运行时的自保，不是修数据：根治在改源重编译（规则 4.19——示范改用 {lkp-*} 占位或体验化
+    表达，且**不写成能独立成立的结论句**，否则修好了数字仍会被抄），丢弃条数即自迭代回路该收到
+    的信号。判据与 gate 同口径是硬要求：prompt 与门禁两处口径不一致，写作器就会被反复打回却不
+    知道该怎么改。
+    """
+    pairs: list[tuple[str, str]] = []
+    for entry in persona.judgment_samples:
+        if not isinstance(entry, dict):
+            continue
+        bad, good = entry.get("bad"), entry.get("good")
+        if not isinstance(bad, str) or not isinstance(good, str):
+            continue
+        bad, good = bad.strip(), good.strip()
+        if not bad or not good:
+            continue
+        if _self_violating(good, banned_terms) or _self_violating(bad, banned_terms):
+            continue
+        pairs.append((bad, good))
+    return pairs
+
+
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     """prompt 拼装（纯函数，可单测）：素材全部来自 release 数据载荷。"""
     banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
     backed = "、".join(request.backed_predicates) if request.backed_predicates else "（无）"
+    # 对照句对是"这么写不行 → 这么写才对"的示范，模型最吃这个形态；放在纪律之后、输出格式之前，
+    # 让它先读完规则再看规则长什么样。下发的每一句（含 ✗）都自己过得了机检（见 judgment_pairs）。
+    pairs = judgment_pairs(request.persona, request.banned_terms)
+    samples = (
+        "这个域里，同一件事这么写不行、这么写才对：\n"
+        + "\n".join(f"✗ {bad}\n✓ {good}" for bad, good in pairs)
+        + "\n（示范只管口吻与句式，别照抄句子——照抄会被打回。）\n"
+        if pairs
+        else ""
+    )
     system = (
         f"{request.persona.identity}\n"
         "写作纪律（违反即被机检打回）：\n"
@@ -83,6 +180,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         f"5. 判断句只允许落在这几个题目上：{backed}。"
         "写了判断句就在 assertions 里声明用的是哪一个；其余题目这轮没有背书，不许下结论；\n"
         f"6. 禁词（一个都不能出现）：{banned}\n"
+        f"{samples}"
         "输出：JSON 数组，每个元素 "
         '{"thesis": 主旨句, "body": 正文, "number_refs": [引用的 lkp- 列表], '
         '"assertions": [声明使用的判断句题目]}，'

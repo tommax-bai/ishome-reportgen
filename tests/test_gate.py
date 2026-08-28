@@ -293,3 +293,35 @@ def test_range_split_reference_gets_contract_hint() -> None:
     assert violations
     assert "占位符代表整条落点" in violations[0].detail
     assert "{lkp-counter-height}" in violations[0].detail
+
+
+def test_verbatim_sample_copy_rejected() -> None:
+    """真跑回归（2026-08-28）：语域示范进 prompt 后，模型把 ✓ 示范句逐字抄进卡片当结论。
+
+    示范给的是"怎么讲"，不是"讲什么"——抄过去就成了一句与这家人无关、也没有落点背书的断言。
+    真跑原句（budget 域）：`主材是唯一你能事后调的一项——柜子和水电定了就改不动了。`
+    """
+    card = Card(
+        thesis="台面按主厨的身体定。",
+        body="台面做到这个高度，你切菜时手腕是平的，不用弓腰。",
+    )
+    violations = [
+        v
+        for v in run_unit_gate([card], "ergonomics", PACKAGE)
+        if v.check == "gate-sample-verbatim-copy"
+    ]
+    assert violations
+    assert "示范给的是怎么讲" in violations[0].detail
+
+
+def test_short_sample_does_not_over_block() -> None:
+    """过拦与漏拦同样是失效：短语级重合是正常用词，只判整句照抄。"""
+    persona = copy.deepcopy(PACKAGE_JSON)
+    persona["personasByDomain"]["ergonomics"][0]["judgmentSamples"] = [
+        {"bad": "台面偏高。", "good": "手腕是平的。", "reason": "cr-x"}
+    ]
+    package = ReportDataPackage.model_validate(persona)
+    card = Card(thesis="台面按主厨的身体定。", body="做完你会发现手腕是平的。")
+    assert "gate-sample-verbatim-copy" not in checks_of(
+        run_unit_gate([card], "ergonomics", package)
+    )

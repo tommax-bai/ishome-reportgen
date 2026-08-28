@@ -4,7 +4,7 @@
 三类判据分离：
 
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
-  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名。
+  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名、语域示范不得被逐字抄进正文。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
 - **降档门禁（gate-thesis-\\* / gate-assertion-\\* / gate-withheld-\\*）**：规则 4.10/4.10a/5.8
   的消费侧强制。档位判定由求值线做完（anchors[].presentation），本层只做**可确定性判定**的
@@ -61,6 +61,11 @@ CHINESE_NUMBER_RE = re.compile(
 THESIS_SUPPORT = "THESIS_SUPPORT"
 WITHHELD = "WITHHELD"
 
+# persona 判断句样例（规则 4.13 之②）进 prompt 后的真跑副作用（2026-08-28）：模型把 ✓ 示范句
+# **逐字抄进卡片**当成这家人的结论——示范是"怎么讲"的样本，不是"讲什么"的素材，抄过去就成了
+# 一句没有落点背书、与这家人无关的断言。整句重合是确定性判据，故归本层；半句化用属语义，归判官层。
+MIN_SAMPLE_LENGTH = 12
+
 
 def collect_banned_terms(domain: str, package: ReportDataPackage) -> list[str]:
     """公共禁词（包内已物化）+ persona 域内禁词（banned_terms 内字符串列表，如 domain_extra）。"""
@@ -70,6 +75,23 @@ def collect_banned_terms(domain: str, package: ReportDataPackage) -> list[str]:
             if isinstance(value, list):
                 terms.update(t for t in value if isinstance(t, str))
     return sorted(terms)
+
+
+def judgment_good_texts(domain: str, package: ReportDataPackage) -> list[str]:
+    """本域判断句样例的**正例原文**（persona 四件之②的 ✓ 侧，规则 4.13）。
+
+    形态不合的条目静默跳过（同 :func:`assertion_budget`）。太短的正例不收：示范句是整句，
+    短语级重合是正常用词而非照抄，拿它判违规就成了过拦（过拦与漏拦同样是失效）。
+    """
+    texts: list[str] = []
+    for persona in package.personas_by_domain.get(domain, []):
+        for entry in persona.judgment_samples:
+            if not isinstance(entry, dict):
+                continue
+            good = entry.get("good")
+            if isinstance(good, str) and len(good.strip()) >= MIN_SAMPLE_LENGTH:
+                texts.append(good.strip())
+    return sorted(set(texts))
 
 
 def assertion_budget(domain: str, package: ReportDataPackage) -> dict[str, list[str]]:
@@ -135,6 +157,7 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
     withheld_ids = {w.lkp_id for w in package.withheld_anchors}
     banned = collect_banned_terms(domain, package)
     budget = assertion_budget(domain, package)
+    good_samples = judgment_good_texts(domain, package)
     pattern_checks = [c for c in package.checks_by_domain.get(domain, []) if c.pattern]
 
     for index, card in enumerate(cards):
@@ -252,6 +275,18 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
             if term in text:
                 violations.append(
                     Violation(check="gate-banned-term", detail=f"{label} 命中禁词「{term}」")
+                )
+
+        for sample in good_samples:
+            if sample in text:
+                violations.append(
+                    Violation(
+                        check="gate-sample-verbatim-copy",
+                        detail=(
+                            f"{label} 逐字抄了语域示范「{sample}」——示范给的是怎么讲，不是讲什么；"
+                            "照抄等于把一句与这家人无关、也没有落点背书的话当成结论"
+                        ),
+                    )
                 )
 
         for check in pattern_checks:

@@ -143,6 +143,18 @@ class ReportDataPackage(_PackageModel):
     personas_by_domain: dict[str, list[PersonaAsset]]
     checks_by_domain: dict[str, list[CheckAsset]]
     banned_terms_by_domain: dict[str, list[str]]
+    locked_texts_by_domain: dict[str, list[str]] = {}
+    """本产物必挂的锁定文案 ID 集（图 v0.2 §2 报告数据包的"锁定清单"，枚举见 contracts
+    `registries/locked_texts.md`）。
+
+    **只有 ID，没有正文**：gen-locked 的定义是"引用锁定文案 ID 或结构化数据直接渲染，零生成"
+    （规则 2.4）——正文在渲染层按 ID 取，成文线连看都不该看到，看不到就拼接不出来。
+
+    键是 dom- 去前缀形态而非 art-：**成文线不认识 art-**（包内无产物字段，单元轴=dom-，
+    图 v0.2 §2），art-→dom- 的换算由调用方在求值时做完，与 ``entitlement`` 同机制（调用方按它在
+    生成哪个 art- 传入，规则引擎不持有产物清单）。缺省空 = 本产物无必挂文案，不是"未知"——生产方
+    未升级的旧包据此不产生误判（宽进），真正的"该挂没挂"由册级校验报出（严查）。
+    """
     anonymous_profile: EvaluationProfile
 
     def domain_anchors(self, domain: str) -> list[ReportAnchor]:
@@ -220,10 +232,23 @@ class UnitComposeResult(BaseModel):
     observations: list[JudgeObservation] = []
     rewrites_used: int = 0
     releases: list[ReleaseRef] = []
+    required_locked_texts: list[str] = []
+    """本域必挂的锁定文案 ID（自包内 ``locked_texts_by_domain`` 切片**原样透传**）。
+
+    单元层只搬运不产出：选择在求值线（哪个 art- 要哪几条）、挂载在装配层、校验在册级——
+    :class:`Card` 上没有放锁定文案的位置（``extra="forbid"``），写作器结构性地产不出它
+    （规则 2.4 gen-locked 零生成）。走单元结果透传而不新开编排入参，是因为编排把单元结果原样
+    喂给装配（载荷不透明），这条路不需要改编排侧一行。"""
 
 
 class Page(BaseModel):
-    """页（唯一知道"页"的层）：page_type 待 pt- 页型库编译，首版按域成页。"""
+    """页（唯一知道"页"的层）：page_type 待 pt- 页型库编译，首版按域成页。
+
+    ``locked_text_ids`` = 本页挂载的锁定文案 ID（规范 §7 全集，contracts
+    `registries/locked_texts.md`）。**载体放在页而不是卡片**：gen-locked 文案是页/册级装配契约
+    （"这一页上必须有这句话"），不是卡片级写作约束——放到 :class:`Card` 上等于把它交给写作层产出，
+    与规则 2.4"零生成"直接冲突。挂载动作在装配层（确定性，按产物要求挂），成文单元只透传要求。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -231,6 +256,7 @@ class Page(BaseModel):
     domain: str
     page_type: str | None = None
     cards: list[Card]
+    locked_text_ids: list[str] = []
 
 
 class PageAssembleRequest(BaseModel):
