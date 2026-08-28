@@ -1,6 +1,8 @@
-"""单元成文 activity：重写循环、failed verdict 上抛、装配与册级校验。"""
+"""单元成文 activity：重写循环、failed verdict 上抛、装配与册级校验、降档门禁前置。"""
 
 from __future__ import annotations
+
+import copy
 
 import pytest
 
@@ -9,13 +11,15 @@ from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
     Card,
+    Page,
     PageAssembleRequest,
     PageAssembleResult,
+    ReportDataPackage,
     UnitComposeRequest,
     UnitComposeResult,
 )
 from reportgen_worker.writer import WriterRequest
-from tests.support import load_package
+from tests.support import PACKAGE_JSON, load_package
 
 PACKAGE = load_package()
 
@@ -33,9 +37,11 @@ class ScriptedWriter:
     def __init__(self, scripts: list[list[Card]]) -> None:
         self._scripts = scripts
         self.seen_feedback: list[list[str]] = []
+        self.seen_requests: list[WriterRequest] = []
 
     async def write(self, request: WriterRequest) -> list[Card]:
         self.seen_feedback.append([v.check for v in request.feedback])
+        self.seen_requests.append(request)
         return self._scripts[min(request.attempt, len(self._scripts) - 1)]
 
 
@@ -46,9 +52,13 @@ def _restore_writer_factory() -> object:
     activities.writer_factory = original
 
 
-async def compose(writer: ScriptedWriter, domain: str = "ergonomics") -> UnitComposeResult:
+async def compose(
+    writer: ScriptedWriter,
+    domain: str = "ergonomics",
+    package: ReportDataPackage = PACKAGE,
+) -> UnitComposeResult:
     activities.writer_factory = lambda: writer
-    raw = await activities.compose_report_unit(UnitComposeRequest(domain=domain, package=PACKAGE))
+    raw = await activities.compose_report_unit(UnitComposeRequest(domain=domain, package=package))
     return UnitComposeResult.model_validate(raw)
 
 
@@ -110,6 +120,47 @@ async def test_assemble_and_book_check() -> None:
     assert book.verdict == "ok"
 
 
+async def test_package_gate_fails_before_calling_writer() -> None:
+    """数据包自身违约（隐藏落点带值下发）→ 写作器一次都不调（规则 4.10 门禁前置）。"""
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["anchors"][0]["presentation"] = "WITHHELD"
+    writer = ScriptedWriter([[GOOD_CARD]])
+    result = await compose(writer, package=ReportDataPackage.model_validate(tainted))
+
+    assert result.verdict == "failed"
+    assert result.violations[0].check == "gate-withheld-anchor-delivered"
+    assert writer.seen_feedback == []
+
+
+async def test_writer_sees_assertion_budget_split() -> None:
+    """写作器拿到的是"这轮许说/不许说"两张清单，不是自己判 degraded（prompt 侧同步）。"""
+    writer = ScriptedWriter([[GOOD_CARD]])
+    await compose(writer)
+
+    assert writer.seen_requests[0].backed_predicates == ["通道净宽是否够"]
+    assert writer.seen_requests[0].unbacked_predicates == ["台面高度", "挂杆高度"]
+
+
+async def test_book_check_rejects_withheld_reference() -> None:
+    """册级最后一道：渲染前再拦一次被隐藏落点的引用（规则 4.10）。"""
+    page = Page(
+        page_id="page-ergonomics",
+        domain="ergonomics",
+        cards=[
+            Card(
+                thesis="挂杆按你的身高定。",
+                body="定在 {lkp-wardrobe-rod}。",
+                number_refs=["lkp-wardrobe-rod"],
+            )
+        ],
+    )
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=[page], package=PACKAGE))
+    )
+    assert book.verdict == "failed"
+    assert "gate-withheld-anchor-referenced" in {v.check for v in book.violations}
+
+
 async def test_assemble_rejects_failed_unit() -> None:
     failed_unit = UnitComposeResult(verdict="failed", domain="lighting")
     assembled = PageAssembleResult.model_validate(
@@ -117,3 +168,14 @@ async def test_assemble_rejects_failed_unit() -> None:
     )
     assert assembled.verdict == "failed"
     assert assembled.violations[0].check == "gate-unit-failed"
+
+
+async def test_empty_card_set_fails_at_unit_level() -> None:
+    """真跑回归：全域降档后模型交空数组——零卡片曾以 verdict=ok 溜过（逐卡片过检无卡片即无违规）。
+
+    失败必须在源头报出，不靠下游装配/册检兜（图 v0.2 §3）。
+    """
+    result = await compose(ScriptedWriter([[]]))
+    assert result.verdict == "failed"
+    assert "gate-empty-composition" in {v.check for v in result.violations}
+    assert not result.cards

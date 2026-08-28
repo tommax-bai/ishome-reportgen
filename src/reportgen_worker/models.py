@@ -30,7 +30,14 @@ class ReleaseRef(_PackageModel):
 
 
 class ReportAnchor(_PackageModel):
-    """落点对象：成文线数字字段唯一合法来源。degraded=未过可核性门（规则 4.10/4.18 消费侧降档）。"""
+    """落点对象：成文线数字字段唯一合法来源。
+
+    ``degraded`` 是标记（未过可核性门），``presentation`` 是强制——求值线按产物权益档判定的
+    呈现档位（规则 4.10）：``THESIS_SUPPORT`` 可作判断句支点、``REFERENCE_ONLY`` 只可参考口吻。
+    ``WITHHELD`` 本不该出现在 anchors 里（求值线判隐藏的落点根本不下发），此处仍收下它是为了
+    **宽进严查**：由 :func:`reportgen_worker.gate.run_package_gate` 报一条读得懂的生产方违约，
+    而不是让整包解析崩在 pydantic 里。
+    """
 
     lkp_id: str
     name: str
@@ -41,6 +48,20 @@ class ReportAnchor(_PackageModel):
     source: str | None = None
     calibration: str
     degraded: bool
+    presentation: Literal["THESIS_SUPPORT", "REFERENCE_ONLY", "WITHHELD"]
+
+
+class WithheldAnchor(_PackageModel):
+    """按规则 4.10 隐藏掉的落点：只有 id/来源/原因，无值——隐藏即内容不下发。
+
+    与 :class:`GapRecord` 分列：gap- 是"求不出"（补公式或补输入），withheld 是"求出了但纪律
+    不许发"（补外部依据把条目转正），两条回流信号不混。成文线用它把"引用了被隐藏的落点"打回
+    成一条说得清的违规，而不是笼统的"引用不存在"。
+    """
+
+    lkp_id: str
+    basis_tag: str
+    reason: str
 
 
 class GapRecord(_PackageModel):
@@ -85,9 +106,16 @@ class EvaluationProfile(_PackageModel):
 
 
 class ReportDataPackage(_PackageModel):
+    """``entitlement`` = 本包服务的产物权益档（FREE/PAID，规范 §3.1 权益列）：降档判定的口径，
+    随包下发只为让成文线能复核门禁，成文线**不重判**——判定结果已在 anchors[].presentation。
+    它是产物属性不是用户属性，不破匿名纪律。
+    """
+
+    entitlement: Literal["FREE", "PAID"]
     domains: list[str]
     releases: list[ReleaseRef]
     anchors: list[ReportAnchor]
+    withheld_anchors: list[WithheldAnchor] = []
     gaps: list[GapRecord]
     personas_by_domain: dict[str, list[PersonaAsset]]
     checks_by_domain: dict[str, list[CheckAsset]]
@@ -105,13 +133,20 @@ class ReportDataPackage(_PackageModel):
 
 
 class Card(BaseModel):
-    """卡片（客户语域）：body/thesis 禁裸数字，数字经 {lkp-*} 占位；number_refs=占位符全集声明。"""
+    """卡片（客户语域）：body/thesis 禁裸数字，数字经 {lkp-*} 占位；number_refs=占位符全集声明。
+
+    ``assertions`` = 本卡声明使用的**断言预算谓词**（persona 的 assertion_budget 谓词名，规则
+    5.8/4.13）。"这句是不是判断句"是语义判断、机检判不确定，所以纪律改成可确定性判定的形态：
+    要说判断句就得先声明用的是哪条预算，出口过检再核该谓词的 requires 是否全部已求值且非降档
+    （规则 4.10a：经验条目不得作判断句背书）。未声明而实际写了判断句，属语义违规，归判官层。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     thesis: str
     body: str
     number_refs: list[str] = []
+    assertions: list[str] = []
 
 
 class Violation(BaseModel):

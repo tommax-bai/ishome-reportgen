@@ -34,4 +34,27 @@ def test_rejects_user_identity_fields() -> None:
 def test_domain_anchor_slice() -> None:
     package = load_package()
     assert [a.lkp_id for a in package.domain_anchors("lighting")] == ["lkp-illuminance-living"]
-    assert [a.lkp_id for a in package.domain_anchors("ergonomics")] == ["lkp-counter-height"]
+    assert [a.lkp_id for a in package.domain_anchors("ergonomics")] == [
+        "lkp-counter-height",
+        "lkp-passage-main",
+    ]
+
+
+def test_parses_gate_fields() -> None:
+    """降档门禁三字段随包（规则 4.10）：权益档、呈现档位、被隐藏落点审计。"""
+    package = load_package()
+    assert package.entitlement == "PAID"
+    assert [a.presentation for a in package.domain_anchors("ergonomics")] == [
+        "REFERENCE_ONLY",
+        "THESIS_SUPPORT",
+    ]
+    assert [w.lkp_id for w in package.withheld_anchors] == ["lkp-wardrobe-rod"]
+    assert package.withheld_anchors[0].reason == "no_range_form"
+
+
+def test_rejects_unknown_presentation_tier() -> None:
+    """呈现档位是闭集：来路不明的档位不许被静默当成可用（fail loud）。"""
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["anchors"][0]["presentation"] = "SUPPORTING"
+    with pytest.raises(ValidationError):
+        load_package().__class__.model_validate(tainted)

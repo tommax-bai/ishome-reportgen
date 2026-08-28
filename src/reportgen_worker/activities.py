@@ -6,6 +6,7 @@
 成文线纪律（图 v0.2 §0/§3，逐条兑现）：
 - 输入=报告数据包（自包含，不回查任何库；匿名由 models extra=forbid 结构性保证）；
 - **dom- 为参数不拆 activity**（规则 5.0c 一台引擎 N 域资产包）；
+- 降档门禁（规则 4.10）先于写作执行：数据包自身违约直接 failed，不烧 LLM 调用；
 - 出口过检不合格 → 违规清单作反馈重写 ≤max_rewrites 轮 → 仍不过 verdict=failed 上抛，
   绝不静默假成功。
 """
@@ -17,7 +18,13 @@ from typing import Any
 
 from temporalio import activity
 
-from reportgen_worker.gate import collect_banned_terms, run_unit_gate
+from reportgen_worker.gate import (
+    backed_predicates,
+    collect_banned_terms,
+    run_package_gate,
+    run_unit_gate,
+    unbacked_predicates,
+)
 from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
@@ -78,6 +85,10 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                 )
             ]
         )
+    # 生产方契约先过一遍：数据包自身违约（如隐藏落点却带值下发）不必烧一次 LLM 调用才发现
+    package_violations = run_package_gate(domain, package)
+    if package_violations:
+        return failed(package_violations)
 
     writer = writer_factory()
     feedback: list[Violation] = []
@@ -89,6 +100,8 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             gaps=package.gaps,
             profile=package.anonymous_profile,
             banned_terms=collect_banned_terms(domain, package),
+            backed_predicates=backed_predicates(domain, package),
+            unbacked_predicates=unbacked_predicates(domain, package),
             feedback=feedback,
             attempt=attempt,
         )
@@ -97,7 +110,14 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
         except WriterOutputError as e:
             feedback = [Violation(check="gate-writer-output-invalid", detail=str(e))]
             continue
+        # 空卡片组不算过检：run_unit_gate 逐卡片跑，没有卡片自然没有违规——"什么都不写"会成为
+        # 绕过全部门禁最省事的路径（真跑 2026-08-28 即出现：全域降档后模型交了空数组）。
+        # 失败必须在源头响亮报出，不靠下游装配/册检兜住（图 v0.2 §3 绝不静默假成功）。
         feedback = run_unit_gate(cards, domain, package)
+        if not feedback and not cards:
+            feedback = [
+                Violation(check="gate-empty-composition", detail=f"{domain} 未产出任何卡片")
+            ]
         if not feedback:
             return UnitComposeResult(
                 verdict="ok",
@@ -142,12 +162,21 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
         if wanted not in page_domains:
             violations.append(Violation(check="gate-domain-page-missing", detail=f"{wanted} 无页"))
     anchor_ids = {a.lkp_id for a in request.package.anchors}
+    withheld_ids = {w.lkp_id for w in request.package.withheld_anchors}
     for page in request.pages:
         if not page.cards:
             violations.append(Violation(check="gate-empty-page", detail=f"{page.page_id} 空页"))
         for card in page.cards:
             for ref in card.number_refs:
-                if ref not in anchor_ids:
+                # 隐藏落点的最后一道：单元级已拦，册级再拦一次（渲染前是最后能停下来的地方）
+                if ref in withheld_ids:
+                    violations.append(
+                        Violation(
+                            check="gate-withheld-anchor-referenced",
+                            detail=f"{page.page_id} 引用 {ref}：该落点已按纪律隐藏（规则 4.10）",
+                        )
+                    )
+                elif ref not in anchor_ids:
                     violations.append(
                         Violation(
                             check="gate-number-ref-unresolved",

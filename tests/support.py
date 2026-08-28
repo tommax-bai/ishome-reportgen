@@ -7,6 +7,7 @@ from typing import Any
 from reportgen_worker.models import ReportDataPackage
 
 PACKAGE_JSON: dict[str, Any] = {
+    "entitlement": "PAID",
     "domains": ["ergonomics", "lighting"],
     "releases": [
         {"domain": "ergonomics", "releaseTag": "ergonomics@v1"},
@@ -23,6 +24,19 @@ PACKAGE_JSON: dict[str, Any] = {
             "source": "行业通行",
             "calibration": "draft",
             "degraded": True,
+            "presentation": "REFERENCE_ONLY",
+        },
+        {
+            "lkpId": "lkp-passage-main",
+            "name": "主通道净宽",
+            "numberClass": "analysis",
+            "unit": "mm",
+            "value": {"min": 900},
+            "basisTag": "ergonomics@v1",
+            "source": "GB 50352 条文",
+            "calibration": "calibrated",
+            "degraded": False,
+            "presentation": "THESIS_SUPPORT",
         },
         {
             "lkpId": "lkp-illuminance-living",
@@ -34,7 +48,12 @@ PACKAGE_JSON: dict[str, Any] = {
             "source": "GB 50034-2013 表5.2.1；GB/T 50034-2024 同值",
             "calibration": "calibrated",
             "degraded": False,
+            "presentation": "THESIS_SUPPORT",
         },
+    ],
+    # PAID 侧被纪律拿掉的落点（规则 4.10）：点值降不成参考区间，值根本不下发
+    "withheldAnchors": [
+        {"lkpId": "lkp-wardrobe-rod", "basisTag": "ergonomics@v1", "reason": "no_range_form"}
     ],
     "gaps": [{"lkpId": "lkp-tv-distance", "reason": "missing_input", "detail": "屏高 × [3,4]"}],
     "personasByDomain": {
@@ -43,7 +62,14 @@ PACKAGE_JSON: dict[str, Any] = {
                 "assetId": "persona-ergonomics",
                 "identity": "你在为这一家人校核他们家的尺寸。",
                 "judgmentSamples": [],
-                "assertionBudget": [{"predicate": "通道净宽", "requires": ["lkp-passage-main"]}],
+                "assertionBudget": [
+                    # 背书得起：requires 全部已求值且非降档
+                    {"predicate": "通道净宽是否够", "requires": ["lkp-passage-main"]},
+                    # 背书不起：唯一 requires 是降档落点（规则 4.10a 经验条目不得作断言背书）
+                    {"predicate": "台面高度", "requires": ["lkp-counter-height"]},
+                    # 背书不起：requires 落点根本没求出来（被隐藏）
+                    {"predicate": "挂杆高度", "requires": ["lkp-wardrobe-rod"]},
+                ],
                 "bannedTerms": {"domain_extra": ["人体工学"]},
                 "version": 1,
             }
