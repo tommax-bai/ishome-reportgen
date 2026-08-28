@@ -1,8 +1,7 @@
 """activity 注册名与 contracts 注册表逐字一致的守门测试。
 
-唯一真源：ishome-contracts `activities/registry.md`（只增不改）。本清单为其
-副本；两处不一致时以 contracts 仓为准并回改此处。成文线首批 activity 待注册，
-两侧同为空——注册落地时先改 contracts，再同 PR 补此清单与实现。
+唯一真源：ishome-contracts `activities/registry.md` #11-13（只增不改）。本清单为其
+副本；两处不一致时以 contracts 仓为准并回改此处。
 """
 
 from __future__ import annotations
@@ -12,7 +11,11 @@ from temporalio import activity
 from reportgen_worker.activities import ACTIVITY_REGISTRY
 
 # 注册名 → 函数名（kebab-case ↔ snake_case 动词前置，规范 §2.4）
-CONTRACTS_ACTIVITY_REGISTRY: dict[str, str] = {}
+CONTRACTS_ACTIVITY_REGISTRY: dict[str, str] = {
+    "report-unit-compose": "compose_report_unit",
+    "report-page-assemble": "assemble_report_pages",
+    "report-book-check": "check_report_book",
+}
 
 
 def test_registry_matches_contracts() -> None:
