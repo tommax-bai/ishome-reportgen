@@ -7,10 +7,12 @@ import copy
 import pytest
 
 from reportgen_worker import activities
+from reportgen_worker.judge import JudgeRequest
 from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
     Card,
+    JudgeObservation,
     Page,
     PageAssembleRequest,
     PageAssembleResult,
@@ -45,19 +47,39 @@ class ScriptedWriter:
         return self._scripts[min(request.attempt, len(self._scripts) - 1)]
 
 
+class ScriptedJudge:
+    """假判官：固定返回给定观察，并记录被问了几次（默认不判出任何问题）。"""
+
+    def __init__(self, observations: list[JudgeObservation] | None = None) -> None:
+        self._observations = observations or []
+        self.seen_requests: list[JudgeRequest] = []
+
+    async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
+        self.seen_requests.append(request)
+        return list(self._observations)
+
+
+FABRICATION = JudgeObservation(
+    check="cr-fabricated-fact", quote="台面高", why="画像里没有家庭构成信息"
+)
+
+
 @pytest.fixture(autouse=True)
-def _restore_writer_factory() -> object:
-    original = activities.writer_factory
+def _restore_factories() -> object:
+    original_writer, original_judge = activities.writer_factory, activities.judge_factory
     yield
-    activities.writer_factory = original
+    activities.writer_factory = original_writer
+    activities.judge_factory = original_judge
 
 
 async def compose(
     writer: ScriptedWriter,
     domain: str = "ergonomics",
     package: ReportDataPackage = PACKAGE,
+    judge: ScriptedJudge | None = None,
 ) -> UnitComposeResult:
     activities.writer_factory = lambda: writer
+    activities.judge_factory = lambda: judge or ScriptedJudge()
     raw = await activities.compose_report_unit(UnitComposeRequest(domain=domain, package=package))
     return UnitComposeResult.model_validate(raw)
 
@@ -168,6 +190,75 @@ async def test_assemble_rejects_failed_unit() -> None:
     )
     assert assembled.verdict == "failed"
     assert assembled.violations[0].check == "gate-unit-failed"
+
+
+async def test_judge_observations_do_not_change_verdict() -> None:
+    """观察态（规则 4.17 门禁二）：判官判出问题也只记录不拦截——verdict 不变、不触发重写。"""
+    writer = ScriptedWriter([[GOOD_CARD]])
+    judge = ScriptedJudge([FABRICATION])
+    result = await compose(writer, judge=judge)
+
+    assert result.verdict == "ok"
+    assert result.rewrites_used == 0
+    assert result.cards == [GOOD_CARD]
+    assert not result.violations
+    assert len(writer.seen_feedback) == 1  # 判官的话没变成第二稿的反馈
+
+
+async def test_judge_observations_are_carried_back_verbatim() -> None:
+    """判官输出原样带回：编号/原句/为什么三件，不加工也不据此改写卡片。"""
+    result = await compose(ScriptedWriter([[GOOD_CARD]]), judge=ScriptedJudge([FABRICATION]))
+
+    assert result.observations == [FABRICATION]
+    assert result.cards == [GOOD_CARD]
+
+
+async def test_judge_runs_only_after_rule_layer_passes() -> None:
+    """判官在规则层之后（图 v0.2 §3）：机检没过的稿子不问判官，别烧那次调用。"""
+    judge = ScriptedJudge()
+    result = await compose(ScriptedWriter([[BAD_CARD], [GOOD_CARD]]), judge=judge)
+
+    assert result.verdict == "ok"
+    assert len(judge.seen_requests) == 1  # 第一稿机检就没过，只有第二稿被判官看过
+    assert judge.seen_requests[0].cards == [GOOD_CARD]
+    assert [c.asset_id for c in judge.seen_requests[0].checks] == ["cr-fabricated-fact"]
+
+
+async def test_judge_failure_does_not_block_composition() -> None:
+    """判官挂掉不阻塞成文：第二道不可用只是没有观察数据，不是这份内容不能发。"""
+
+    class BrokenJudge:
+        async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
+            raise RuntimeError("判官网关 502")
+
+    activities.writer_factory = lambda: ScriptedWriter([[GOOD_CARD]])
+    activities.judge_factory = BrokenJudge
+    raw = await activities.compose_report_unit(
+        UnitComposeRequest(domain="ergonomics", package=PACKAGE)
+    )
+    result = UnitComposeResult.model_validate(raw)
+
+    assert result.verdict == "ok"
+    assert result.cards == [GOOD_CARD]
+    assert result.observations == []
+
+
+async def test_promoted_check_intercepts_and_feeds_rewrite() -> None:
+    """拦截能力在数据侧：把同一条判据 status 改成 active，观察即成为重写反馈——代码一行没改。"""
+    promoted = copy.deepcopy(PACKAGE_JSON)
+    promoted["checksByDomain"]["ergonomics"][1]["status"] = "active"
+    writer = ScriptedWriter([[GOOD_CARD]])
+    result = await compose(
+        writer,
+        package=ReportDataPackage.model_validate(promoted),
+        judge=ScriptedJudge([FABRICATION]),
+    )
+
+    assert result.verdict == "failed"
+    assert result.rewrites_used == 2
+    assert result.violations[0].check == "cr-fabricated-fact"
+    assert writer.seen_feedback[1] == ["cr-fabricated-fact"]
+    assert result.observations == [FABRICATION]  # 失败也带回观察，回路要得到这份信号
 
 
 async def test_empty_card_set_fails_at_unit_level() -> None:

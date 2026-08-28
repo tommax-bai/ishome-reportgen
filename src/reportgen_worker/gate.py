@@ -28,17 +28,34 @@ PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)\}")
 DIGIT_RE = re.compile(r"[0-9０-９]")
 BARE_LKP_RE = re.compile(r"lkp-", re.IGNORECASE)
 
-# 中文数字 + 量词/单位：真跑（2026-08-28 三域 PAID）抓到的绕过——模型被禁裸数字后改写
-# "亮三到五倍""不能低于九十"，阿拉伯数字门禁一字未命中，但读者读到的仍是没有落点背书的数字。
-# 只在**跟着量词/单位**时判违规：光判中文数字字符会把"一般活动""一起""十分"全打成违规
-# （量词表按真实误报补，不做通用中文数字解析——不发明表达式语法）。
-CHINESE_NUMERAL = "零一二三四五六七八九十百千两"
+# 中文数字：真跑（2026-08-28）抓到的绕过——模型被禁裸数字后改写"亮三到五倍""不能低于九十"，
+# 阿拉伯数字门禁一字未命中，但读者读到的仍是没有落点背书的数字。
+#
+# 判据形态经一次自我修正：初版只判"数字+量词"，结果**漏掉了它自己的立案样本**——"不能低于九十"
+# 没有量词（自迭代回路首采 §五-1 实测，该句在四次跑里逐字出现且全部通过）。光判数字字符又会把
+# "一般活动""一起""十分"打成违规。故收成三条互补形态，每条都要求数词处在**数量语境**里：
+#   ① 数词 + 量词/单位（三到五倍、九十厘米）
+#   ② 比较词 + 数词（不低于九十、达到三成）——补的正是立案样本这一类
+#   ③ 数词 + 概数词 + 单位（七十多厘米、二十几万）——真跑漏过一次定位数字（0.75m 参考平面）
+# 量词表按真实误报补，不做通用中文数字解析（不发明表达式语法）。
+CHINESE_NUMERAL = "零一二三四五六七八九十百千两半"
+# 量词只收**测量/选型**类：规则 2.3 数字三分法的射程是定位/选型/分析数字，**列举计数不在其内**。
+# 故 个|条|项|次|遍|盏|种|层|档|点 一律不收——真跑实测"四个区域""这三项""这两点"会被打成违规，
+# 那是把"数东西"当成"报数值"，拦下去等于让引擎写不成句（过拦与漏拦同样是失效）。
+# 计数若确属选型数字（如"色温不超过三种"），由形态②的比较词兜住。
 CHINESE_QUANTIFIER = (
-    "倍|度|米|厘米|毫米|公分|平米|平方米|㎡|元|万|盏|个|条|级|档|种|层|成|折|"
-    "分之|点|秒|分钟|小时|天|周|月|年|K|lx|mm|cm|m"
+    "倍|度|米|厘米|毫米|公分|平米|平方米|㎡|元|万|级|成|折|"
+    "分之|秒|分钟|小时|天|周|月|年|K|lx|mm|cm|m"
 )
+CHINESE_COMPARATOR = (
+    "低于|高于|不到|不足|达到|超过|至少|最多|多于|少于|大于|小于|将近|接近|大约|近|约"
+)
+CHINESE_APPROX = "多|几|来|余"
+_NUM = f"[{CHINESE_NUMERAL}]+(?:到|至|~|-)?[{CHINESE_NUMERAL}]*"
 CHINESE_NUMBER_RE = re.compile(
-    f"[{CHINESE_NUMERAL}]+(?:到|至|~|-)?[{CHINESE_NUMERAL}]*({CHINESE_QUANTIFIER})"
+    f"(?:{_NUM}(?:{CHINESE_QUANTIFIER})"  # ① 数词+量词
+    f"|(?:{CHINESE_COMPARATOR}){_NUM}"  # ② 比较词+数词（立案样本"不能低于九十"）
+    f"|{_NUM}(?:{CHINESE_APPROX})(?:{CHINESE_QUANTIFIER}))"  # ③ 数词+概数+单位
 )
 
 THESIS_SUPPORT = "THESIS_SUPPORT"
@@ -140,10 +157,18 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
                     )
                 )
             elif ref not in anchor_ids:
+                # 真跑常见形态：模型想分别引用区间两端，自造 {lkp-x-min}/{lkp-x-max}。
+                # 打回理由要说清渲染契约（一个占位符=整条落点），否则它只会换个名字再造一次。
+                base = re.sub(r"-(min|max)$", "", ref)
+                hint = (
+                    f"——占位符代表整条落点，区间写 {{{base}}} 即可，拆 min/max 会丢掉另一端"
+                    if base != ref and base in anchor_ids
+                    else "（数字只能引用求值线产出）"
+                )
                 violations.append(
                     Violation(
                         check="gate-number-ref-unresolved",
-                        detail=f"{label} 引用 {ref} 不在本域落点对象内（数字只能引用求值线产出）",
+                        detail=f"{label} 引用 {ref} 不在本域落点对象内{hint}",
                     )
                 )
         undeclared = placeholders - set(card.number_refs)
@@ -231,7 +256,21 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
 
         for check in pattern_checks:
             assert check.pattern is not None
-            if re.search(check.pattern, stripped):
+            hit = re.search(check.pattern, stripped) is not None
+            # check_type 决定 pattern 的语义，此前被整个忽略（凡带 pattern 一律"命中即违规"），
+            # 于是 regex_require_annotation（"出现工程量纲**则要求**配翻译"）被反着执行。
+            # 当前因裸数字已禁而不会命中，是休眠 bug——自迭代回路首采 §五-2 抓到。
+            # require 类的"是否配了翻译"本身判不确定（语义），故只在**命中且本卡没有任何落点引用**时
+            # 判违规：引用了落点即视为已挂翻译，其余归判官层，机检不假实现。
+            if check.check_type == "regex_require_annotation":
+                if hit and not card.number_refs:
+                    violations.append(
+                        Violation(
+                            check=check.asset_id,
+                            detail=f"{label} {check.message}（命中量纲但本卡未引用任何落点）",
+                        )
+                    )
+            elif hit:
                 violations.append(
                     Violation(check=check.asset_id, detail=f"{label} {check.message}")
                 )

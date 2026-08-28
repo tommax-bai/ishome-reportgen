@@ -96,10 +96,41 @@ PACKAGE_JSON: dict[str, Any] = {
                 "message": "分析级结论禁弱词（规则 5.9）",
                 "decidedBy": "规范规则 5.9",
                 "thresholdRefs": [],
+                "examples": [],
+                "status": "active",
+                "version": 1,
+            },
+            # 判官层判据（规则 4.17）：反例样例挂 cr- 之下，首批观察态——判出的问题只记录不拦截
+            {
+                "assetId": "cr-fabricated-fact",
+                "checkType": "semantic_judge",
+                "scope": ["正文"],
+                "pattern": None,
+                "requirement": "关于这家人的事实只能来自匿名画像",
+                "message": "编造输入之外的家庭事实（规则 4.3；图 v0.2 §0）",
+                "decidedBy": "规范规则 4.3 + 图 v0.2 §0",
+                "thresholdRefs": [],
+                "examples": [
+                    {
+                        "bad": "你和你太太",
+                        "why": "画像里没有家庭构成信息，「太太」是模型自己添的人",
+                        "fixed": "两个人同时用的时候",
+                    }
+                ],
+                "status": "observing",
+                "version": 1,
+            },
+        ],
+        # V4 之前发布的快照没有 examples/status 两字段：模型侧缺省 = 空样例 + observing
+        "lighting": [
+            {
+                "assetId": "cr-legacy-no-judge-fields",
+                "checkType": "cross_field",
+                "message": "老快照条目（无 examples/status）",
+                "decidedBy": "规范规则 4.10b",
                 "version": 1,
             }
         ],
-        "lighting": [],
     },
     "bannedTermsByDomain": {"ergonomics": ["依据", "综合考量"], "lighting": ["依据"]},
     "anonymousProfile": {

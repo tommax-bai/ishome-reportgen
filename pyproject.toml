@@ -66,7 +66,9 @@ root_packages = ["reportgen_worker"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "worker 内 worker → activities → writer/gate → models 单向"
+name = "worker 内 worker → activities → writer|judge → gate → models 单向"
 type = "layers"
-layers = ["worker", "activities", "writer", "gate", "models"]
+# writer 与 judge 同层且互不可见（"|" = independent siblings）：判官与写作器共享任何东西都是
+# 同源漂移的入口——判官只能拿 release 数据判，不许复用写作器的 prompt 素材（规则 4.17）。
+layers = ["worker", "activities", "writer | judge", "gate", "models"]
 containers = ["reportgen_worker"]

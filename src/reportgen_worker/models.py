@@ -81,8 +81,29 @@ class PersonaAsset(_PackageModel):
     version: int
 
 
+class CheckExample(_PackageModel):
+    """判官反例样例（规则 4.17）三件：``bad`` 真跑里模型写出的原句、``why`` 为什么错、
+    ``fixed`` 合规写法。
+
+    **只收真跑观察到的样本**，禁想象填充（规范 v2.3 §12）——种子集真实度即系统能发现问题的上限。
+    ``fixed`` 不进判官 prompt：判官只报编号不改写，把改好的答案递给它等于请它越权
+    （见 :mod:`reportgen_worker.judge`）。
+    """
+
+    bad: str
+    why: str
+    fixed: str
+
+
 class CheckAsset(_PackageModel):
-    """cr- 判据（规则 4.10b 纪律形态）：release 数据物化执行，不硬编码。"""
+    """cr- 判据（规则 4.10b 纪律形态）：release 数据物化执行，不硬编码。
+
+    一条判据落哪一层由数据说了算（图 v0.2 §3 判据下沉次序 schema > 规则 > prompt > 判官）：
+    带 ``pattern`` 的走规则层逐字机检；``examples`` 非空的走判官层（规则层判不出的语义违规）。
+    ``status`` 是规则 4.17 入册门禁第二道的开关——``observing`` 只记录不拦截、``active`` 命中即违规、
+    ``retired`` 停用。**代码里没有"要不要拦"的分支**，拦截权只能由 release 数据授予。
+    V4 之前的快照无此二字段，缺省 = 空样例 + observing（无拦截权，安全方向）。
+    """
 
     asset_id: str
     check_type: str
@@ -92,6 +113,8 @@ class CheckAsset(_PackageModel):
     message: str
     decided_by: str
     threshold_refs: list[str] = []
+    examples: list[CheckExample] = []
+    status: str = "observing"
     version: int
 
 
@@ -158,6 +181,21 @@ class Violation(BaseModel):
     detail: str
 
 
+class JudgeObservation(BaseModel):
+    """判官观察：命中的 cr- 编号 + 原句片段 + 为什么。
+
+    **三个字段就是判官的全部输出面**（extra=forbid）：没有放改写建议的位置——判官越权改写＝判官与
+    写手同源漂移，那是写作器的活（图 v0.2 §3"只报 cr- 编号不改写"）。观察态下它不影响 verdict，
+    只随结果回流，供规则 4.17 的入册门禁统计触发率。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    check: str
+    quote: str
+    why: str
+
+
 class UnitComposeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -167,7 +205,11 @@ class UnitComposeRequest(BaseModel):
 
 
 class UnitComposeResult(BaseModel):
-    """单元成文结果：重写用尽仍不过 → verdict=failed 上抛，绝不静默假成功（图 v0.2 §3）。"""
+    """单元成文结果：重写用尽仍不过 → verdict=failed 上抛，绝不静默假成功（图 v0.2 §3）。
+
+    ``observations`` = 判官层产出（规则层之后的第二道）。**观察态只记录不拦截**：它出现在 ok 结果里
+    是常态，不是矛盾——规则 4.17 入册门禁第二道要求新判据先只记录跑 N 份，触发率合格才谈拦截。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -175,6 +217,7 @@ class UnitComposeResult(BaseModel):
     domain: str
     cards: list[Card] = []
     violations: list[Violation] = []
+    observations: list[JudgeObservation] = []
     rewrites_used: int = 0
     releases: list[ReleaseRef] = []
 

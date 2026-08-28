@@ -8,7 +8,9 @@
 - **dom- 为参数不拆 activity**（规则 5.0c 一台引擎 N 域资产包）；
 - 降档门禁（规则 4.10）先于写作执行：数据包自身违约直接 failed，不烧 LLM 调用；
 - 出口过检不合格 → 违规清单作反馈重写 ≤max_rewrites 轮 → 仍不过 verdict=failed 上抛，
-  绝不静默假成功。
+  绝不静默假成功；
+- 出口过检两道：规则层（gate，确定性）→ 判官层（judge，语义，观察态只记录不拦截）。
+  **判官不注册新 activity**——它在单元子图内（图 v0.2 §3），是这一步的一部分不是一次派发。
 """
 
 from __future__ import annotations
@@ -25,9 +27,18 @@ from reportgen_worker.gate import (
     run_unit_gate,
     unbacked_predicates,
 )
+from reportgen_worker.judge import (
+    Judge,
+    JudgeRequest,
+    LlmJudge,
+    blocking_check_ids,
+    judge_checks,
+    observe,
+)
 from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
+    JudgeObservation,
     Page,
     PageAssembleRequest,
     PageAssembleResult,
@@ -44,20 +55,31 @@ def default_writer_factory() -> CardWriter:
     return LlmCardWriter()
 
 
-# 测试注入点：monkeypatch 本工厂即可替换写作器（activity 入参保持纯数据）
+def default_judge_factory() -> Judge:
+    return LlmJudge()
+
+
+# 测试注入点：monkeypatch 本工厂即可替换写作器/判官（activity 入参保持纯数据）
 writer_factory: Callable[[], CardWriter] = default_writer_factory
+judge_factory: Callable[[], Judge] = default_judge_factory
 
 
 @activity.defn(name="report-unit-compose")
 async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
-    """单元成文：叙事推导+卡片写作（LLM）→ 出口过检·规则层 → 重写循环 → ok/failed verdict。"""
+    """单元成文：卡片写作（LLM）→ 出口过检·规则层 → **判官层** → 重写循环 → ok/failed verdict。
+
+    判官在单元子图内、规则层之后（图 v0.2 §3），**不注册新 activity**——它是这一步的一部分，
+    不是一次派发。只在规则层放行后才跑：规则层没过的稿子还要重写，先烧一次判官调用没有意义。
+    """
     domain, package = request.domain, request.package
+    observations: list[JudgeObservation] = []
 
     def failed(violations: list[Violation], rewrites: int = 0) -> ActivityResult:
         return UnitComposeResult(
             verdict="failed",
             domain=domain,
             violations=violations,
+            observations=observations,
             rewrites_used=rewrites,
             releases=package.releases,
         ).model_dump()
@@ -91,6 +113,9 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
         return failed(package_violations)
 
     writer = writer_factory()
+    judge = judge_factory()
+    checks = judge_checks(domain, package)
+    blocking = blocking_check_ids(domain, package)
     feedback: list[Violation] = []
     for attempt in range(request.max_rewrites + 1):
         writer_request = WriterRequest(
@@ -119,13 +144,32 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                 Violation(check="gate-empty-composition", detail=f"{domain} 未产出任何卡片")
             ]
         if not feedback:
-            return UnitComposeResult(
-                verdict="ok",
-                domain=domain,
-                cards=cards,
-                rewrites_used=attempt,
-                releases=package.releases,
-            ).model_dump()
+            # 出口过检·判官层（图 v0.2 §3 第二道）：规则层放行后才问判官。
+            # 观察态（规则 4.17 门禁二）= blocking 为空 → 判出什么都只记录，verdict 不受影响；
+            # 某条判据经观察期转正为 active 后，同一份观察即成为重写反馈——**开关在数据不在这里**。
+            observations = await observe(
+                judge,
+                JudgeRequest(
+                    domain=domain,
+                    cards=cards,
+                    checks=checks,
+                    profile=package.anonymous_profile,
+                    anchors=anchors,
+                ),
+            )
+            blocked = [o for o in observations if o.check in blocking]
+            if not blocked:
+                return UnitComposeResult(
+                    verdict="ok",
+                    domain=domain,
+                    cards=cards,
+                    observations=observations,
+                    rewrites_used=attempt,
+                    releases=package.releases,
+                ).model_dump()
+            feedback = [
+                Violation(check=o.check, detail=f"判官命中「{o.quote}」：{o.why}") for o in blocked
+            ]
     return failed(feedback, rewrites=request.max_rewrites)
 
 

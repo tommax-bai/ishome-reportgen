@@ -215,3 +215,81 @@ def test_chinese_words_containing_numerals_pass() -> None:
         number_refs=["lkp-counter-height"],
     )
     assert "gate-chinese-numeral" not in checks_of(run_unit_gate([ordinary], "ergonomics", PACKAGE))
+
+
+def test_chinese_numeral_founding_sample_now_caught() -> None:
+    """自迭代回路首采 §五-1：初版判据漏掉了它自己的立案样本（"不能低于九十"无量词）。
+
+    该句在四次真跑里逐字出现且全部通过——比较词形态补上后必须被拦。
+    """
+    for bad in (
+        "显色指数不能低于九十。",
+        "亮度要达到三成以上。",
+        "地面以上七十多厘米高的位置要有足够亮度。",
+        "主材与定制往往占去近半支出。",
+    ):
+        card = Card(thesis=bad, body="正文。", number_refs=[])
+        assert "gate-chinese-numeral" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE)), (
+            bad
+        )
+
+
+def test_chinese_numeral_still_not_false_positive() -> None:
+    """收宽形态后仍不许误伤日常词。"""
+    ordinary = Card(
+        thesis="操作台的高度要跟着主厨的身体走。",
+        body="一般活动时你会一起进出，十分顺手，台面按 {lkp-counter-height} 做。",
+        number_refs=["lkp-counter-height"],
+    )
+    assert "gate-chinese-numeral" not in checks_of(run_unit_gate([ordinary], "ergonomics", PACKAGE))
+
+
+def test_chinese_numeral_case_matrix() -> None:
+    """判据边界钉死：**测量/选型**的数要拦，**列举计数**的数不拦（规则 2.3 数字三分法的射程）。
+
+    全部取自 2026-08-28 真跑：拦的六条逐字出现过，放的八条曾被过拦或属日常词。
+    过拦与漏拦同样是失效——"四个区域"被打成违规会让引擎写不成句。
+    """
+    from reportgen_worker.gate import CHINESE_NUMBER_RE
+
+    for text in (
+        "显色指数不能低于九十。",
+        "重点区域比周围亮三到五倍。",
+        "地面以上七十多厘米高的位置。",
+        "主材与定制往往占去近半支出。",
+        "全屋色温不超过三种。",
+        "预算大概是二十几万。",
+    ):
+        assert CHINESE_NUMBER_RE.search(text), f"应拦未拦：{text}"
+    for text in (
+        "厨房、卫生间、书房、卧室四个区域",
+        "拆改、水电、泥木这三项",
+        "这两点你要盯住",
+        "三层照明规划",
+        "一般活动时",
+        "十分顺手",
+        "一起进出",
+        "更接近自然光下的样子",
+    ):
+        assert not CHINESE_NUMBER_RE.search(text), f"误伤：{text}"
+
+
+def test_range_split_reference_gets_contract_hint() -> None:
+    """真跑形态：模型想分引用区间两端，自造 {lkp-x-min}/{lkp-x-max}。
+
+    打回理由必须讲清渲染契约（一个占位符=整条落点），否则它只会换个名字再造一次；
+    拆 min/max 会丢掉另一端，而上下限往往各管一条纪律。
+    """
+    card = Card(
+        thesis="台面高度定在这个范围。",
+        body="从 {lkp-counter-height-min} 到 {lkp-counter-height-max}。",
+        number_refs=["lkp-counter-height-min", "lkp-counter-height-max"],
+    )
+    violations = [
+        v
+        for v in run_unit_gate([card], "ergonomics", PACKAGE)
+        if v.check == "gate-number-ref-unresolved"
+    ]
+    assert violations
+    assert "占位符代表整条落点" in violations[0].detail
+    assert "{lkp-counter-height}" in violations[0].detail
