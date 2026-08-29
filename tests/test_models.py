@@ -31,6 +31,19 @@ def test_rejects_user_identity_fields() -> None:
         load_package().__class__.model_validate(tainted_profile)
 
 
+def test_parses_city_tier_as_market_parameter() -> None:
+    """城市档随匿名画像下发（裁决 2026-08-29）：市场参数不是身份，故进得了 extra=forbid 的模型。
+
+    缺席也照常解析——老包（未升级的生产方）没有这个字段，造价章降回全国粗档区间，不是解析失败。
+    """
+    package = load_package()
+    assert package.anonymous_profile.city_tier == "一线"
+
+    legacy = copy.deepcopy(PACKAGE_JSON)
+    legacy["anonymousProfile"].pop("cityTier")
+    assert load_package().__class__.model_validate(legacy).anonymous_profile.city_tier is None
+
+
 def test_domain_anchor_slice() -> None:
     package = load_package()
     assert [a.lkp_id for a in package.domain_anchors("lighting")] == ["lkp-illuminance-living"]

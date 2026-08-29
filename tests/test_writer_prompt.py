@@ -47,6 +47,18 @@ def test_anchor_lines_carry_presentation_tier() -> None:
     assert "【可作支点】" in user
 
 
+def test_city_tier_stays_out_of_prompt() -> None:
+    """城市档不下发进写作 prompt：档在求值线已经用掉（按它选单价区间，规则 5.15）。
+
+    下发它没有任何写作用途，只会诱出"一线城市…"这类关于这家人的陈述——那正是
+    ``cr-fabricated-fact`` 管的形态（可知家庭事实=画像，但画像字段不等于该被复述的话）。
+    """
+    messages = build_messages(request_for())
+    assert PACKAGE.anonymous_profile.city_tier == "一线"
+    assert "一线" not in messages[0]["content"] + messages[1]["content"]
+    assert "cityTier" not in messages[1]["content"]
+
+
 def test_unbacked_anchor_enters_prompt() -> None:
     """未过门的落点照常进 prompt（v2.4 取消隐藏档）——藏起来的建议对业主等于没有。
 

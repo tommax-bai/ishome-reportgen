@@ -153,13 +153,20 @@ class CheckAsset(_PackageModel):
 
 
 class EvaluationProfile(_PackageModel):
-    """匿名画像：字段全集即上限——extra=forbid 拒绝任何用户标识。"""
+    """匿名画像：字段全集即上限——extra=forbid 拒绝任何用户标识。
+
+    ``city_tier`` = 城市档（裁决 2026-08-29）：**市场参数不是身份**——一个城市几十万住户，
+    不具标识性；缺它则造价章要么失真要么哑火。它在**求值线**用掉（按档选单价区间，规则 5.15），
+    成文线只是收下来：写作 prompt 里**不下发**——档已经选完了，写作侧知道它只会多一句
+    "一线城市…"这类关于这家人的陈述，而卡片该说的是这个数是多少、为什么。
+    """
 
     chief_height_mm: int | None = None
     tallest_height_mm: int | None = None
     eye_height_mm: int | None = None
     tv_screen_height_mm: int | None = None
     layout_features: dict[str, str] = {}
+    city_tier: str | None = None
 
 
 class ReportDataPackage(_PackageModel):

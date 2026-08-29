@@ -215,6 +215,8 @@ PACKAGE_JSON: dict[str, Any] = {
         "eyeHeightMm": None,
         "tvScreenHeightMm": None,
         "layoutFeatures": {"kitchen_shape": "U", "sunken_bathroom": "true"},
+        # 城市档（裁决 2026-08-29）：求值线按它选单价档，成文线只收下不下发进 prompt
+        "cityTier": "一线",
     },
 }
 
