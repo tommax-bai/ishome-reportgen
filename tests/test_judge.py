@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
@@ -98,6 +99,41 @@ def test_parse_drops_unknown_check_and_unverifiable_quote() -> None:
     raw = """[{"check": "cr-made-up", "quote": "你和你太太", "why": "编号是判官自己造的"},
               {"check": "cr-fabricated-fact", "quote": "你的三个孩子", "why": "原句文稿里没有"}]"""
     assert parse_observations(raw, make_request()) == []
+
+
+def test_parse_drops_observation_citing_a_standard_it_never_saw() -> None:
+    """判官在 why 里引了输入面之外的标准号 → 丢弃（2026-08-29 真跑立案，逐字复现）。
+
+    判官的输入面里没有任何标准原文（连落点的 source 都不给），引一个就是编的——而它正在判的
+    就是"说没有依据的话"。真样本：说 lkp-bed-height "实际为单点推荐值（依据国标 GB/T 3328-2016）"，
+    而包里这条逐字是 min/max 区间。
+    """
+    raw = json.dumps(
+        [
+            {
+                "check": "cr-fabricated-fact",
+                "quote": "你和你太太同时在厨房忙活",
+                "why": "lkp-counter-height 实际为单点推荐值（依据国标 GB/T 3328-2016 条款）",
+            }
+        ],
+        ensure_ascii=False,
+    )
+    assert parse_observations(raw, make_request()) == []
+
+
+def test_parse_keeps_internal_rule_reference() -> None:
+    """内部条文号照收：`规则 5.8`、`§2.3` 本来就在判据 message 里，判官复述它是正常的。"""
+    raw = json.dumps(
+        [
+            {
+                "check": "cr-fabricated-fact",
+                "quote": "你和你太太同时在厨房忙活",
+                "why": "画像里没有家庭构成信息（规则 4.3 溯源纪律）",
+            }
+        ],
+        ensure_ascii=False,
+    )
+    assert len(parse_observations(raw, make_request())) == 1
 
 
 def test_parse_tolerates_garbage_output() -> None:

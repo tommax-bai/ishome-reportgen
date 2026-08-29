@@ -49,6 +49,13 @@ _OBSERVATIONS_ADAPTER: TypeAdapter[list[JudgeObservation]] = TypeAdapter(list[Ju
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
 _QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
 
+# 外部标准号（国标/行标/国际标准）。判官的输入面里**没有任何标准原文**——prompt 只给它判据与样例、
+# 匿名画像、落点名、待检文稿（:func:`build_judge_messages`，落点的 source 都不给）。所以 ``why``
+# 里出现一个输入面里没有的标准号，它只可能是判官自己编的。
+_STANDARD_CITATION_RE = re.compile(
+    r"(?:GB\s*/?\s*T?\s*\d[\d.\-–—]*|JGJ\s*/?\s*T?\s*\d[\d.\-–—]*|ISO\s*\d+|EN\s*\d+)"
+)
+
 OBSERVING = "observing"
 ACTIVE = "active"
 RETIRED = "retired"
@@ -168,16 +175,57 @@ def parse_observations(raw: str, request: JudgeRequest) -> list[JudgeObservation
         return []
     known = {c.asset_id for c in request.checks}
     corpus = "\n".join(f"{c.thesis}\n{c.body}" for c in request.cards)
+    inputs = _input_face(request)
     observations = []
     for item in parsed:
         quote = item.quote.strip(_QUOTE_TRIM)
+        fabricated = _fabricated_citations(item.why, inputs)
         if item.check not in known:
             logger.warning("判官报了未下发的判据 %s，丢弃", item.check)
         elif not quote or quote not in corpus:
             logger.warning("判官的原句在文稿里找不到（%s），丢弃", item.check)
+        elif fabricated:
+            logger.warning("判官引了输入面里没有的标准号 %s（%s），丢弃", fabricated, item.check)
         else:
             observations.append(item)
     return observations
+
+
+def _normalized(text: str) -> str:
+    return re.sub(r"[\s/]", "", text).upper()
+
+
+def _input_face(request: JudgeRequest) -> str:
+    """判官这一次真看得见的全部文本（归一化）：判据与样例 + 落点名 + 画像 + 待检文稿。
+
+    与"编造家庭事实"判据同一条论证形式（图 v0.2 §0）：把可知面封闭起来，面外的东西必然无源。
+    """
+    parts = [c.thesis + c.body for c in request.cards]
+    parts += [f"{a.lkp_id}{a.name}" for a in request.anchors]
+    parts.append(json.dumps(request.profile.model_dump(), ensure_ascii=False))
+    for check in request.checks:
+        parts += [check.asset_id, check.message, check.requirement or ""]
+        parts += [e.bad + e.why for e in check.examples]
+    return _normalized("\n".join(parts))
+
+
+def _fabricated_citations(why: str, inputs: str) -> list[str]:
+    """``why`` 里引了输入面之外的外部标准号 → 这条观察是编的（2026-08-29 真跑立案）。
+
+    立案样本逐字：判官报 `床面高度建议在{lkp-bed-height}之间` 违规，理由写
+    *"ergonomics 领域中 lkp-bed-height 实际为单点推荐值（依据国标 GB/T 3328-2016 床具高度条款）"*
+    ——而包里这条落点逐字是 ``{"min":450,"max":500}``，是区间；那个标准号也从没进过它的输入面。
+    **判官正在判的就是"说没有依据的话"，它自己犯同一件事时没有理由留着**（同"原句必须找得到"）。
+
+    只认外部标准号，不碰 ``规则 x.y``/``§`` 这类内部条文号——后者本来就在判据 message 里，
+    判官复述它是正常的。**丢弃而不是标记**：观察态下多报一条比漏报一条更贵，误报会污染门禁二的
+    触发率，让不该转正的判据看起来在工作（同 :func:`parse_observations` 既有两道核实的口径）。
+    """
+    return [
+        m.group(0)
+        for m in _STANDARD_CITATION_RE.finditer(why)
+        if _normalized(m.group(0)) not in inputs
+    ]
 
 
 class LlmJudge:
