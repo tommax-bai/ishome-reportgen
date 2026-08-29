@@ -12,7 +12,7 @@ from reportgen_worker.deriver import (
     build_derive_messages,
     parse_claims,
 )
-from reportgen_worker.gate import backed_predicates, unbacked_predicates
+from reportgen_worker.gate import backed_predicates, collect_banned_terms, unbacked_predicates
 from reportgen_worker.models import AnchorBrief
 from tests.support import load_package
 
@@ -27,6 +27,7 @@ def request_for(domain: str = DOMAIN) -> DeriveRequest:
         anchors=[AnchorBrief.of(a) for a in PACKAGE.domain_anchors(domain)],
         gaps=PACKAGE.gaps,
         profile=PACKAGE.anonymous_profile,
+        banned_terms=collect_banned_terms(domain, PACKAGE),
         backed_predicates=backed_predicates(domain, PACKAGE),
         unbacked_predicates=unbacked_predicates(domain, PACKAGE),
     )
@@ -53,6 +54,17 @@ def test_derive_prompt_carries_stance_and_budget_but_not_samples() -> None:
     assert "通道净宽" in system  # 断言预算题目：许说的与不许说的都要让它知道
     assert "台面按主厨的身体定，不取平均值。" not in system  # persona 的 ✓ 示范句
     assert "不许出现任何数字" in system
+
+
+def test_derive_prompt_carries_banned_terms() -> None:
+    """禁词要往上游多走一层（规则 4.15 双消费的第三个消费点，真跑立案）。
+
+    主张逐字进写作 prompt：主张里带一个禁词，写作器跟着写进卡片被打回，而下一稿拿到的主张还是那句——
+    真跑实测整单元连吃三稿死在同一个词（`净宽`）上。
+    """
+    system = build_derive_messages(request_for())[0]["content"]
+    assert "人体工学" in system
+    assert "综合考量" in system  # 公共禁词与域内禁词都要给
 
 
 def test_gaps_can_become_a_claim() -> None:

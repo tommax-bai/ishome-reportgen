@@ -141,6 +141,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     observations: list[JudgeObservation] = []
     judge_run: JudgeRun | None = None
     claims: list[NarrativeClaim] = []
+    derive_feedback: list[str] = []
 
     def failed(violations: list[Violation], rewrites: int = 0) -> ActivityResult:
         return UnitComposeResult(
@@ -202,12 +203,16 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                         anchors=[AnchorBrief.of(a) for a in anchors],
                         gaps=package.gaps,
                         profile=package.anonymous_profile,
+                        banned_terms=collect_banned_terms(domain, package),
                         backed_predicates=backed_predicates(domain, package),
                         unbacked_predicates=unbacked_predicates(domain, package),
+                        feedback=derive_feedback,
                     )
                 )
             except DeriverOutputError as e:
-                # 不退回"没有主张照样写"：那正是这一步要修的老形态，静默退回＝静默假成功
+                # 不退回"没有主张照样写"：那正是这一步要修的老形态，静默退回＝静默假成功。
+                # 打回理由回流进下一次推导——不告诉它哪儿错了，它只会把同一句再写一遍。
+                derive_feedback = [str(e)]
                 feedback = [Violation(check="gate-narrative-derive-failed", detail=str(e))]
                 continue
         writer_request = WriterRequest(

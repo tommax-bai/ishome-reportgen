@@ -47,6 +47,17 @@ def test_anchor_lines_carry_presentation_tier() -> None:
     assert "【可作支点】" in user
 
 
+def test_prompt_warns_that_anchor_names_carry_banned_words() -> None:
+    """落点名里就带着禁词（真跑立案：ergonomics 连吃三稿死在「净宽」上——
+    而那正是 lkp-passage-main 的名字）。
+
+    不改数据改说法：名字是内部标签，`照度`/`净宽` 这类工程词在落点名里是准确的，
+    要求它们改成业主词面反而会把「照度」写成「亮度」——两个物理量。语域分界在**正文**，不在标签。
+    """
+    system = build_messages(request_for())[0]["content"]
+    assert "落点的名字里可能就带着禁词" in system
+
+
 def test_city_tier_stays_out_of_prompt() -> None:
     """城市档不下发进写作 prompt：档在求值线已经用掉（按它选单价区间，规则 5.15）。
 

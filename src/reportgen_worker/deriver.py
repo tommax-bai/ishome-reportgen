@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Sequence
 from typing import Protocol
 
 import httpx
@@ -44,8 +45,18 @@ class DeriveRequest(BaseModel):
     anchors: list[AnchorBrief]
     gaps: list[GapRecord] = []
     profile: EvaluationProfile
+    banned_terms: list[str] = []
+    """本域禁词（规则 4.15 双消费的第三个消费点，2026-08-29 真跑补上）。
+
+    推导步的产物**逐字进写作 prompt**：主张里带一个禁词，写作器就会跟着写进卡片、被机检打回，
+    而下一稿拿到的主张还是那句——真跑实测整单元连吃三稿死在同一个词（`净宽`）上。
+    prompt 与门禁两处口径不一致，写作器会被反复打回却不知道该怎么改；
+    这里是同一条纪律往上游多走一层。"""
     backed_predicates: list[str] = []
     unbacked_predicates: list[str] = []
+    feedback: list[str] = []
+    """上一次推导被打回的理由（重试时下发）：同写作那条循环的形态——不告诉它哪儿错了，
+    它只会把同一句再写一遍（真跑实测：同一个禁词连吃三稿）。"""
 
 
 class DeriverOutputError(Exception):
@@ -60,6 +71,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     """推导 prompt（纯函数，可单测）：素材只有身份、落点题名、缺口、匿名画像、断言预算题目。"""
     backed = "、".join(request.backed_predicates) if request.backed_predicates else "（无）"
     unbacked = "、".join(request.unbacked_predicates) if request.unbacked_predicates else "（无）"
+    banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
     system = (
         f"{request.identity}\n"
         "这一步你**不写给业主看**，你在决定这一章讲哪几件事。纪律：\n"
@@ -80,6 +92,9 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "但那条主张说的应当是「这取决于什么」而不是「结论是什么」；\n"
         "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
         "不要为了铺满而拆出没有取舍的主张；\n"
+        f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）：{banned}。"
+        "**落点的名字里可能就带着这些词**——那是内部标签不是说法，"
+        "你在主张里要换成人话（例如别写「净宽」，写「能不能并排走过去」）；\n"
         '输出：JSON 数组，每个元素 {"claim": 主张, "anchors": [用到的落点 id]}，'
         "不要输出数组以外的任何内容。"
     )
@@ -92,6 +107,10 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         # 只给题名不给值：这一步不产生数字（图 v0.2 §3），不给值即产不出
         "本域可用的落点（只有题名，值在下一步）：\n" + "\n".join(anchor_lines),
     ]
+    if request.feedback:
+        user_parts.append(
+            "上一稿被打回，逐条改：\n" + "\n".join(f"- {f}" for f in request.feedback)
+        )
     if request.gaps:
         user_parts.append(
             "本次求不出的落点（「这件事现在还算不出来」本身可以是一条主张）：\n"
@@ -103,7 +122,9 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     ]
 
 
-def parse_claims(raw: str, known_anchor_ids: set[str]) -> list[NarrativeClaim]:
+def parse_claims(
+    raw: str, known_anchor_ids: set[str], banned_terms: Sequence[str] = ()
+) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
     自造 id 不当成致命错误：``anchors`` 是给写作器的建议，真正的引用校验在
@@ -127,6 +148,14 @@ def parse_claims(raw: str, known_anchor_ids: set[str]) -> list[NarrativeClaim]:
     ]
     if not cleaned:
         raise DeriverOutputError("推导没有产出任何主张")
+    hits = sorted({t for t in banned_terms for c in cleaned if t in c.claim})
+    if hits:
+        # 主张是内部语域，禁词表是客户语域的——**这里仍然用同一份表**，因为主张逐字进写作 prompt：
+        # 真跑两次证明写作步兜不住（拿到带禁词的主张，连吃三稿都在同一个词上被打回，
+        # 而下一稿拿到的主张还是那句）。判在这一步，写作步才有一份干净的骨架。
+        raise DeriverOutputError(
+            f"主张里出现禁词 {hits}——这几个词下一步照抄就会被机检打回，换人话重写"
+        )
     return cleaned
 
 
@@ -154,4 +183,4 @@ class LlmNarrativeDeriver:
             )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
-        return parse_claims(content, {a.lkp_id for a in request.anchors})
+        return parse_claims(content, {a.lkp_id for a in request.anchors}, request.banned_terms)
