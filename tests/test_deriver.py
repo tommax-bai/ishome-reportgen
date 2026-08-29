@@ -67,6 +67,25 @@ def test_derive_prompt_carries_banned_terms() -> None:
     assert "综合考量" in system  # 公共禁词与域内禁词都要给
 
 
+def test_derive_prompt_bans_invented_coupling() -> None:
+    """归组依据＝同属一件事，落点间因果/耦合不得编造（用户裁决 2026-08-29 晚，规范 v2.5 §14.10）。
+
+    真跑立案：5/5 主张全带"得一起定/配着调/互相让"式耦合胶水——部分是旧指令
+    "每条主张要有取舍或因果"自己逼出来的。关系与数字同族，都不由 LLM 决定。
+    """
+    system = build_derive_messages(request_for())[0]["content"]
+    assert "不是它们之间有因果" in system
+    assert "得一起定" in system  # 反例词面写明，不留猜
+    assert "取舍或因果" not in system  # 逼出耦合的旧指令退场
+
+
+def test_unbacked_topic_must_be_confessed_in_derivation() -> None:
+    """坦白主张（裁决 B）在推导步同款：不许描述性分析、不许发明因果去填。"""
+    system = build_derive_messages(request_for())[0]["content"]
+    assert "坦白主张" in system
+    assert "不许发明因果去填" in system
+
+
 def test_gaps_can_become_a_claim() -> None:
     """ "这件事现在还算不出来"本身可以是一条主张（规则 4.18：宁可说没有，不许硬写）。"""
     user = build_derive_messages(request_for())[1]["content"]

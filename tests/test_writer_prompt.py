@@ -70,6 +70,25 @@ def test_city_tier_stays_out_of_prompt() -> None:
     assert "cityTier" not in messages[1]["content"]
 
 
+def test_unbacked_topics_get_confession_register() -> None:
+    """无背书题目＝坦白语域（规则 4.18 v2.5，用户裁决选 B）。
+
+    原口径"可以描述现象，不能给判断"实测把模型逼进元语言与伪因果——真跑逐字：
+    "各分项在总造价中的相对权重无法锚定于固定比例，因为拆除量直接挤压定制柜投影面积的可布设范围"。
+    """
+    user = build_messages(request_for())[1]["content"]
+    assert "只许坦白" in user
+    assert "不要编原因" in user
+    assert "描述现象" not in user  # 旧口径整句退场
+
+
+def test_writer_bans_boundary_words_before_placeholder() -> None:
+    """占位符前禁边界词（单边界措辞归渲染层裁决）：prompt 不能一边教「不少于」一边被判据拦。"""
+    system = build_messages(request_for())[0]["content"]
+    assert "占位符前不要写「不少于/不低于/至少/不超过」" in system
+    assert "带下限的用「不少于」" not in system
+
+
 def test_unbacked_anchor_enters_prompt() -> None:
     """未过门的落点照常进 prompt（v2.4 取消隐藏档）——藏起来的建议对业主等于没有。
 

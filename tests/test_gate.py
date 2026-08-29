@@ -86,6 +86,33 @@ def test_banned_terms_merged_from_vocab_and_persona() -> None:
     assert [v for v in violations if v.check == "gate-banned-term"]
 
 
+def test_release_pattern_runs_on_raw_text_with_placeholders() -> None:
+    """release 判据跑原文（2026-08-29 晚改）：占位符引用类 pattern 剥了占位就永远打不中。
+
+    立案判据＝cr-bound-word-before-placeholder（边界词+{lkp-，渲染层单边界措辞叠字那条裁决）。
+    """
+    check = {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": ["正文"],
+        "pattern": "(不少于|不低于|至少|不超过)\\s*[（(]?\\{lkp-",
+        "message": "占位符前禁边界词",
+        "decidedBy": "用户裁决 2026-08-29 晚",
+        "version": 1,
+    }
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["checksByDomain"]["ergonomics"].append(check)
+    package = ReportDataPackage.model_validate(tainted)
+    card = Card(
+        thesis="主通道要走得开。",
+        body="主通道留出不少于 {lkp-passage-main} 的空间。",
+        number_refs=["lkp-passage-main"],
+    )
+    assert "cr-bound-word-before-placeholder" in checks_of(
+        run_unit_gate([card], "ergonomics", package)
+    )
+
+
 def test_release_check_pattern_executed() -> None:
     """cr- 判据是 release 数据：包内 cr-weak-words 的 pattern 被物化执行。"""
     card = Card(thesis="这里可能可以再看看。", body="建议考虑一下。", number_refs=[])

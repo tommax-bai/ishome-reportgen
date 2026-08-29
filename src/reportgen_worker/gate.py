@@ -378,7 +378,11 @@ def run_unit_gate(
 
         for check in pattern_checks:
             assert check.pattern is not None
-            hit = re.search(check.pattern, stripped) is not None
+            # 判据跑**原文**不跑剥占位后的文本（2026-08-29 晚改）：cr-bound-word-before-placeholder
+            # 的 pattern 就是「边界词 + {lkp-」——剥掉占位符它永远打不中。原先剥占位是防 pattern
+            # 误中占位符内部，但占位符体是 kebab-case ASCII，中不了任何中文/数字/量纲 pattern，
+            # 剥与不剥只对"引用占位符本身"的判据有区别——而那正是要能中的。
+            hit = re.search(check.pattern, text) is not None
             # check_type 决定 pattern 的语义，此前被整个忽略（凡带 pattern 一律"命中即违规"），
             # 于是 regex_require_annotation（"出现工程量纲**则要求**配翻译"）被反着执行。
             # 当前因裸数字已禁而不会命中，是休眠 bug——自迭代回路首采 §五-2 抓到。
