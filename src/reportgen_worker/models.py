@@ -71,7 +71,7 @@ class ReportAnchor(_PackageModel):
     calibration: str
     degraded: bool
     provenance: AnchorProvenance | None = None
-    presentation: Literal["THESIS_SUPPORT", "REFERENCE_ONLY", "WITHHELD"]
+    presentation: Literal["THESIS_SUPPORT", "REFERENCE_ONLY"]
 
     @property
     def requires_annotation(self) -> bool:

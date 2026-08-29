@@ -77,23 +77,19 @@ def test_release_check_pattern_executed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_thesis_may_not_lean_on_degraded_anchor() -> None:
-    """判断句支点必须过可核性门：降档落点进正文可以，进主旨句不行。"""
+def test_unbacked_anchor_may_enter_thesis() -> None:
+    """未过门的落点**可以进主旨句**（v2.4：规则 4.10c 明文废止"支点必须是可作支点档"）。
+
+    机检不再管"用哪个落点下判断"，改管两件确定性的事：断言预算有没有背书（下面几条），
+    以及这一页有没有标出依据（册级页面比对）。原门禁在这里拦了整整三个版本，拦的代价是
+    未过门的建议根本进不了主旨句——也就进不了业主眼里，转正需要的行为信号无从产生。
+    """
     in_thesis = Card(
         thesis="台面就该做到 {lkp-counter-height}。",
         body="这样你切菜时手腕是平的。",
         number_refs=["lkp-counter-height"],
     )
-    assert "gate-thesis-degraded-anchor" in checks_of(
-        run_unit_gate([in_thesis], "ergonomics", PACKAGE)
-    )
-
-    in_body = Card(
-        thesis="操作台的高度要跟着主厨的身体走。",
-        body="参考范围是 {lkp-counter-height}，最终以现场复核为准。",
-        number_refs=["lkp-counter-height"],
-    )
-    assert run_unit_gate([in_body], "ergonomics", PACKAGE) == []
+    assert run_unit_gate([in_thesis], "ergonomics", PACKAGE) == []
 
 
 def test_thesis_on_calibrated_anchor_passes() -> None:
@@ -152,26 +148,19 @@ def test_assertion_outside_budget_rejected() -> None:
     assert "gate-assertion-not-budgeted" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
 
 
-def test_withheld_anchor_reference_rejected() -> None:
-    """隐藏落点不得被引用，且打回理由说得清（不是笼统的"引用不存在"）。"""
+def test_unbacked_anchor_is_referenceable() -> None:
+    """曾被隐藏的点值落点现在照常可引用（v2.4）：它只是语域受限，不是不存在。"""
     card = Card(
         thesis="挂杆按你的身高定。",
         body="定在 {lkp-wardrobe-rod} 这个高度。",
         number_refs=["lkp-wardrobe-rod"],
     )
-    violations = run_unit_gate([card], "ergonomics", PACKAGE)
-    assert "gate-withheld-anchor-referenced" in checks_of(violations)
-    assert "gate-number-ref-unresolved" not in checks_of(violations)
+    assert run_unit_gate([card], "ergonomics", PACKAGE) == []
 
 
-def test_package_gate_rejects_delivered_withheld_anchor() -> None:
-    """生产方契约：判为隐藏却带值下发 = 求值线违约，写作前就拦下（不烧 LLM 调用）。"""
+def test_package_gate_passes_clean_package() -> None:
+    """v2.4 起生产方契约守卫只剩标注一致性一条：隐藏档没了，"判为隐藏却带值下发"无从发生。"""
     assert run_package_gate("ergonomics", PACKAGE) == []
-
-    tainted = copy.deepcopy(PACKAGE_JSON)
-    tainted["anchors"][0]["presentation"] = "WITHHELD"
-    violations = run_package_gate("ergonomics", ReportDataPackage.model_validate(tainted))
-    assert checks_of(violations) == {"gate-withheld-anchor-delivered"}
 
 
 def test_bare_lkp_identifier_leak_rejected() -> None:
@@ -336,7 +325,7 @@ def test_short_sample_does_not_over_block() -> None:
 
 def test_annotation_requirement_reads_provenance() -> None:
     """要求集口径是落点自己的 provenance：未过门的要标、过门的不要标。"""
-    assert set(annotation_required_anchors(PACKAGE)) == {"lkp-counter-height"}
+    assert set(annotation_required_anchors(PACKAGE)) == {"lkp-counter-height", "lkp-wardrobe-rod"}
 
 
 def test_annotation_requirement_falls_back_without_provenance() -> None:
@@ -345,7 +334,7 @@ def test_annotation_requirement_falls_back_without_provenance() -> None:
     legacy["anchors"][0].pop("provenance")
     package = ReportDataPackage.model_validate(legacy)
 
-    assert set(annotation_required_anchors(package)) == {"lkp-counter-height"}
+    assert set(annotation_required_anchors(package)) == {"lkp-counter-height", "lkp-wardrobe-rod"}
 
 
 def test_provenance_notes_cover_only_referenced_anchors() -> None:
@@ -407,4 +396,8 @@ def test_package_gate_accepts_expired_but_flagged_anchor() -> None:
     package = ReportDataPackage.model_validate(expired)
 
     assert run_package_gate("ergonomics", package) == []
-    assert set(annotation_required_anchors(package)) == {"lkp-counter-height", "lkp-passage-main"}
+    assert set(annotation_required_anchors(package)) == {
+        "lkp-counter-height",
+        "lkp-passage-main",
+        "lkp-wardrobe-rod",
+    }

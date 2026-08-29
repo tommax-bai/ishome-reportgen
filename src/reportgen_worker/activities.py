@@ -246,7 +246,6 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
         if wanted not in page_domains:
             violations.append(Violation(check="gate-domain-page-missing", detail=f"{wanted} 无页"))
     anchor_ids = {a.lkp_id for a in request.package.anchors}
-    withheld_ids = {w.lkp_id for w in request.package.withheld_anchors}
     annotation_required = annotation_required_anchors(request.package)
     for page in request.pages:
         if not page.cards:
@@ -292,15 +291,7 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
                 )
         for card in page.cards:
             for ref in card.number_refs:
-                # 隐藏落点的最后一道：单元级已拦，册级再拦一次（渲染前是最后能停下来的地方）
-                if ref in withheld_ids:
-                    violations.append(
-                        Violation(
-                            check="gate-withheld-anchor-referenced",
-                            detail=f"{page.page_id} 引用 {ref}：该落点已按纪律隐藏（规则 4.10）",
-                        )
-                    )
-                elif ref not in anchor_ids:
+                if ref not in anchor_ids:
                     violations.append(
                         Violation(
                             check="gate-number-ref-unresolved",

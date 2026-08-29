@@ -5,11 +5,12 @@ prompt 只从报告数据包内的 persona 载荷与落点对象拼装——运�
 换模型改网关配置不改代码）。
 输出为结构化 JSON 卡片：数字只经 {lkp-*} 占位（出口过检的零漂移前提）。
 
-降档纪律在 prompt 侧的形态（规则 4.10/5.8）：落点按 ``presentation`` 分【可作支点】与
-【降档·只可参考口吻】两档逐条标注；判断句题目按断言预算切成"这轮许说/这轮不许说"两张清单。
+语域纪律在 prompt 侧的形态（规则 4.10a/4.10c/5.8）：落点按 ``presentation`` 分【可作支点】与
+【未过门·建议口吻】两档逐条标注；判断句题目按断言预算切成"这轮许说/这轮不许说"两张清单。
 prompt 只是第一道，**不是门禁**——真正拦截在 :mod:`reportgen_worker.gate`
-（判据下沉次序 schema > 规则 > prompt > 判官，图 v0.2 §3）。被隐藏的落点不进 prompt：
-它们的 id 与名称一并不下发，写作器无从提起。
+（判据下沉次序 schema > 规则 > prompt > 判官，图 v0.2 §3）。
+**v2.4 起没有落点被扣着不下发**（隐藏档取消）：未过门的照常进 prompt、也可以进主旨句，
+它的依据标注由系统挂在页上——故 prompt 里明说"别自己写来源和日期"。
 
 persona 四件（规则 4.13）在本仓的消费面已齐：①身份语域=system 头；②**判断句风格样例**=本模块
 :func:`judgment_pairs`（好/坏对照句对，唯一以"示范"形态进 prompt 的判据）；③断言预算与
@@ -172,8 +173,9 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "不要拆成 {lkp-x-min}/{lkp-x-max}——那样会丢掉另一端，而上下限往往各管一条纪律"
         "（下限管够不够，上限管过不过）。句式跟着落点走：区间用「在…之间」「…到…」，"
         "带下限的用「不少于」；\n"
-        "3. 落点分两档：标【可作支点】的可以拿来下判断；标【降档·只可参考口吻】的只能"
-        "以区间、参考、待现场确认的口吻提到，**主旨句里不许出现它**；\n"
+        "3. 落点分两档：标【可作支点】的可以拿来下判断；标【未过门·建议口吻】的照常用，"
+        "**主旨句里也可以出现**，但语域限「我们建议…」「按行业通行做法…」，"
+        "不许写成「国标要求」「必须」这类标准口吻——它没有外部依据背书；\n"
         "4. 不许把 lkp- 开头的内部编号写进正文或主旨句——业主不认识这些编号。"
         "要用它的数字就写 {lkp-id} 占位；要说这条没有依据背书，用人话说（如"
         "「这一项目前只能给参考范围」），不要点名编号；\n"
@@ -190,11 +192,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     )
     anchor_lines = [
         f"- {a.lkp_id}（{a.name}，{a.unit or '无单位'}）= {json.dumps(a.value, ensure_ascii=False)}"
-        + (
-            "【可作支点】"
-            if a.presentation == "THESIS_SUPPORT"
-            else "【降档·只可参考口吻，禁进主旨句】"
-        )
+        + ("【可作支点】" if a.presentation == "THESIS_SUPPORT" else "【未过门·建议口吻】")
         for a in request.anchors
     ]
     gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in request.gaps]

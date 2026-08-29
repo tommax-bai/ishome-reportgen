@@ -203,14 +203,14 @@ async def test_package_without_locked_texts_requires_none() -> None:
 
 
 async def test_package_gate_fails_before_calling_writer() -> None:
-    """数据包自身违约（隐藏落点带值下发）→ 写作器一次都不调（规则 4.10 门禁前置）。"""
+    """数据包自身违约（未过门却标称无需标注）→ 写作器一次都不调（门禁前置，不烧 LLM 调用）。"""
     tainted = copy.deepcopy(PACKAGE_JSON)
-    tainted["anchors"][0]["presentation"] = "WITHHELD"
+    tainted["anchors"][0]["provenance"]["annotationRequired"] = False
     writer = ScriptedWriter([[GOOD_CARD]])
     result = await compose(writer, package=ReportDataPackage.model_validate(tainted))
 
     assert result.verdict == "failed"
-    assert result.violations[0].check == "gate-withheld-anchor-delivered"
+    assert result.violations[0].check == "gate-provenance-inconsistent"
     assert writer.seen_feedback == []
 
 
@@ -223,8 +223,8 @@ async def test_writer_sees_assertion_budget_split() -> None:
     assert writer.seen_requests[0].unbacked_predicates == ["台面高度", "挂杆高度"]
 
 
-async def test_book_check_rejects_withheld_reference() -> None:
-    """册级最后一道：渲染前再拦一次被隐藏落点的引用（规则 4.10）。"""
+async def test_book_check_accepts_unbacked_reference_with_annotation() -> None:
+    """v2.4：曾被隐藏的落点照常引用——册级要的不再是"别提它"，而是"这页标了它的依据没有"。"""
     page = Page(
         page_id="page-ergonomics",
         domain="ergonomics",
@@ -235,12 +235,16 @@ async def test_book_check_rejects_withheld_reference() -> None:
                 number_refs=["lkp-wardrobe-rod"],
             )
         ],
+        provenance_notes=[
+            ProvenanceNote(lkp_id="lkp-wardrobe-rod", source="行业通行", calibration="draft")
+        ],
     )
     book = BookCheckResult.model_validate(
         await activities.check_report_book(BookCheckRequest(pages=[page], package=PACKAGE))
     )
-    assert book.verdict == "failed"
-    assert "gate-withheld-anchor-referenced" in {v.check for v in book.violations}
+    checks = {v.check for v in book.violations}
+    assert "gate-number-ref-unresolved" not in checks
+    assert "gate-provenance-annotation-missing" not in checks
 
 
 async def test_assemble_rejects_failed_unit() -> None:

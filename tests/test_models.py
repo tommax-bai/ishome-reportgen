@@ -37,19 +37,20 @@ def test_domain_anchor_slice() -> None:
     assert [a.lkp_id for a in package.domain_anchors("ergonomics")] == [
         "lkp-counter-height",
         "lkp-passage-main",
+        "lkp-wardrobe-rod",
     ]
 
 
 def test_parses_gate_fields() -> None:
-    """降档门禁三字段随包（规则 4.10）：权益档、呈现档位、被隐藏落点审计。"""
+    """门禁字段随包：权益档、呈现档位；withheldAnchors 恒空（v2.4 取消隐藏档）。"""
     package = load_package()
     assert package.entitlement == "PAID"
     assert [a.presentation for a in package.domain_anchors("ergonomics")] == [
         "REFERENCE_ONLY",
         "THESIS_SUPPORT",
+        "REFERENCE_ONLY",
     ]
-    assert [w.lkp_id for w in package.withheld_anchors] == ["lkp-wardrobe-rod"]
-    assert package.withheld_anchors[0].reason == "no_range_form"
+    assert package.withheld_anchors == []
 
 
 def test_rejects_unknown_presentation_tier() -> None:
@@ -58,6 +59,18 @@ def test_rejects_unknown_presentation_tier() -> None:
     tainted["anchors"][0]["presentation"] = "SUPPORTING"
     with pytest.raises(ValidationError):
         load_package().__class__.model_validate(tainted)
+
+
+def test_rejects_withheld_presentation_from_stale_producer() -> None:
+    """v2.4 起 WITHHELD 不是合法档位：还在隐藏的生产方**整包解析失败**，比放它进来安全。
+
+    隐藏本身已经是违约而不再是纪律——收下它意味着这一份报告里有一批建议被悄悄扣着不发，
+    而消费侧已经没有任何门禁会为此报警。
+    """
+    stale = copy.deepcopy(PACKAGE_JSON)
+    stale["anchors"][0]["presentation"] = "WITHHELD"
+    with pytest.raises(ValidationError):
+        load_package().__class__.model_validate(stale)
 
 
 def test_parses_provenance_fields() -> None:

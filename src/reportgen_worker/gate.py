@@ -8,10 +8,13 @@
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
 - **语域与标注门禁（gate-thesis-\\* / gate-assertion-\\* / gate-provenance-\\*）**：规则
   4.10a/4.10c/5.8 的消费侧强制。判定由求值线做完（anchors[].presentation 与
-  anchors[].provenance.annotationRequired），本层只做**可确定性判定**的事：①主旨句引用的落点必须
-  全部是 THESIS_SUPPORT；②卡片声明的断言预算谓词必须在本域 persona 的 assertion_budget 内，
-  且其 requires 的 lkp- 全部已求值且非降档；③未过门/已过期落点被引用时，同页必须挂它的依据标注
+  anchors[].provenance.annotationRequired），本层只做**可确定性判定**的事：①卡片声明的断言预算
+  谓词必须在本域 persona 的 assertion_budget 内，
+  且其 requires 的 lkp- 全部已求值且非降档；②未过门/已过期落点被引用时，同页必须挂它的依据标注
   （规则 4.10c 标注必挂，v2.4 起替代隐藏档；页级比对在册级 :mod:`reportgen_worker.activities`）。
+  **v2.4 拆掉的两件**：隐藏落点的引用拦截（隐藏档整档作废）与"主旨句支点必须是 THESIS_SUPPORT"
+  （规则 4.10c 明文失效：未过门落点已可进主旨句，条件是随页标注）。断言预算那一条**不变**——
+  它管的是"以什么底气说"，不是"能不能说"。
   **明确不做的**：判断句的语义识别——"这句话算不算判断句"没有确定性判据，机检不假实现。
   未声明 assertions 却写成判断句、参考口吻被写成断言口吻，全部归**判官层**（分域反例库，
   图 v0.2 §3 出口过检·判官层）。本层只保证"声明了就必须有背书"，不保证"没声明就不是断言"。
@@ -60,7 +63,6 @@ CHINESE_NUMBER_RE = re.compile(
 )
 
 THESIS_SUPPORT = "THESIS_SUPPORT"
-WITHHELD = "WITHHELD"
 CALIBRATED = "calibrated"
 
 # persona 判断句样例（规则 4.13 之②）进 prompt 后的真跑副作用（2026-08-28）：模型把 ✓ 示范句
@@ -182,18 +184,6 @@ def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]
     """
     violations: list[Violation] = []
     for anchor in package.anchors:
-        # 隐藏档的旧守卫（规则 4.10 v2.3）：v2.4 已取消隐藏，**本条随拆分支一并删**——
-        # 规范写死的实现纪律是"先建标注链路，再拆隐藏分支"，故它在本轮仍在岗。
-        if anchor.presentation == WITHHELD:
-            violations.append(
-                Violation(
-                    check="gate-withheld-anchor-delivered",
-                    detail=(
-                        f"{anchor.lkp_id} 判为隐藏却随包下发了值——隐藏即不下发"
-                        "（规则 4.10；求值线降档纪律的输出违约）"
-                    ),
-                )
-            )
         provenance = anchor.provenance
         if provenance is None:
             continue
@@ -223,8 +213,9 @@ def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]
 def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) -> list[Violation]:
     violations: list[Violation] = []
     anchor_ids = {a.lkp_id for a in package.domain_anchors(domain)}
+    # 断言预算核验仍要它（规则 5.8：谓词 requires 必须全部过可核性门）——v2.4 拆掉的是
+    # "主旨句支点必须过门"，不是"断言必须有背书"
     supported = thesis_support_ids(domain, package)
-    withheld_ids = {w.lkp_id for w in package.withheld_anchors}
     banned = collect_banned_terms(domain, package)
     budget = assertion_budget(domain, package)
     good_samples = judgment_good_texts(domain, package)
@@ -240,16 +231,7 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
 
         placeholders = set(PLACEHOLDER_RE.findall(text))
         for ref in sorted(placeholders | set(card.number_refs)):
-            if ref in withheld_ids:
-                violations.append(
-                    Violation(
-                        check="gate-withheld-anchor-referenced",
-                        detail=(
-                            f"{label} 引用 {ref}：该落点已按纪律隐藏，本产物内不存在（规则 4.10）"
-                        ),
-                    )
-                )
-            elif ref not in anchor_ids:
+            if ref not in anchor_ids:
                 # 真跑常见形态：模型想分别引用区间两端，自造 {lkp-x-min}/{lkp-x-max}。
                 # 打回理由要说清渲染契约（一个占位符=整条落点），否则它只会换个名字再造一次。
                 base = re.sub(r"-(min|max)$", "", ref)
@@ -273,19 +255,9 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
                 )
             )
 
-        # 主旨句是判断句的所在处（规则 5.8 断言预算只花在这里）：支点必须全部过可核性门
-        for ref in sorted(set(PLACEHOLDER_RE.findall(card.thesis))):
-            if ref in anchor_ids and ref not in supported:
-                violations.append(
-                    Violation(
-                        check="gate-thesis-degraded-anchor",
-                        detail=(
-                            f"{label} 主旨句以降档落点 {ref} 作支点——未背书条目只能以参考口吻"
-                            "进正文，撑不起判断句（规则 4.10/4.10a）"
-                        ),
-                    )
-                )
-
+        # v2.4 拆除：原 gate-thesis-degraded-anchor（主旨句支点必须是 THESIS_SUPPORT）。
+        # 规则 4.10c 明文把它作废——未过门落点已可进主旨句，条件是随页标注。判断句的纪律
+        # 由下面的断言预算承接（"以什么底气说"），标注纪律由册级页面比对承接（"标没标"）。
         for predicate in card.assertions:
             requires = budget.get(predicate)
             if requires is None:

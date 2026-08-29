@@ -56,6 +56,27 @@ PACKAGE_JSON: dict[str, Any] = {
             "presentation": "THESIS_SUPPORT",
         },
         {
+            # v2.4 之前它是"被隐藏"的典型（点值降不成参考区间）：现在照常下发，语域降为建议口吻，
+            # 风险由同页标注承接——它同时是"未过门落点仍撑不起断言预算"的样本（挂杆高度谓词）
+            "lkpId": "lkp-wardrobe-rod",
+            "name": "衣柜挂杆高",
+            "numberClass": "selection",
+            "unit": "mm",
+            "value": {"v": 2136},
+            "basisTag": "ergonomics@v1",
+            "source": "行业通行",
+            "calibration": "draft",
+            "degraded": True,
+            "provenance": {
+                "source": "行业通行",
+                "effectiveFrom": None,
+                "effectiveTo": None,
+                "calibration": "draft",
+                "annotationRequired": True,
+            },
+            "presentation": "REFERENCE_ONLY",
+        },
+        {
             "lkpId": "lkp-illuminance-living",
             "name": "起居室照度标准值",
             "numberClass": "analysis",
@@ -75,10 +96,8 @@ PACKAGE_JSON: dict[str, Any] = {
             "presentation": "THESIS_SUPPORT",
         },
     ],
-    # PAID 侧被纪律拿掉的落点（规则 4.10）：点值降不成参考区间，值根本不下发
-    "withheldAnchors": [
-        {"lkpId": "lkp-wardrobe-rod", "basisTag": "ergonomics@v1", "reason": "no_range_form"}
-    ],
+    # v2.4（2026-08-29）取消隐藏档后恒空：字段按契约"只增不删"保留，永远没有内容
+    "withheldAnchors": [],
     "gaps": [{"lkpId": "lkp-tv-distance", "reason": "missing_input", "detail": "屏高 × [3,4]"}],
     "personasByDomain": {
         "ergonomics": [
@@ -121,7 +140,7 @@ PACKAGE_JSON: dict[str, Any] = {
                     {"predicate": "通道净宽是否够", "requires": ["lkp-passage-main"]},
                     # 背书不起：唯一 requires 是降档落点（规则 4.10a 经验条目不得作断言背书）
                     {"predicate": "台面高度", "requires": ["lkp-counter-height"]},
-                    # 背书不起：requires 落点根本没求出来（被隐藏）
+                    # 背书不起：requires 落点未过可核性门（v2.4 起它照常下发，但撑不起断言）
                     {"predicate": "挂杆高度", "requires": ["lkp-wardrobe-rod"]},
                 ],
                 "bannedTerms": {"domain_extra": ["人体工学"]},

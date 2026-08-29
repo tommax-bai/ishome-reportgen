@@ -36,18 +36,26 @@ def request_for(domain: str = DOMAIN) -> WriterRequest:
 
 
 def test_anchor_lines_carry_presentation_tier() -> None:
-    """落点逐条标档：降档的明确写"禁进主旨句"，与 gate-thesis-degraded-anchor 同口径。"""
+    """落点逐条标档：未过门的标"建议口吻"。
+
+    v2.4 起不再写"禁进主旨句"——那条门禁已随隐藏档一并作废，prompt 与 gate 仍需同口径。
+    """
     user = build_messages(request_for())[1]["content"]
     assert "lkp-counter-height" in user
-    assert "【降档·只可参考口吻，禁进主旨句】" in user
+    assert "【未过门·建议口吻】" in user
     assert "lkp-passage-main（主通道净宽，mm）" in user
     assert "【可作支点】" in user
 
 
-def test_withheld_anchor_never_enters_prompt() -> None:
-    """隐藏落点连名字都不下发——写作器无从提起（规则 4.10）。"""
-    messages = build_messages(request_for())
-    assert all("lkp-wardrobe-rod" not in m["content"] for m in messages)
+def test_unbacked_anchor_enters_prompt() -> None:
+    """未过门的落点照常进 prompt（v2.4 取消隐藏档）——藏起来的建议对业主等于没有。
+
+    它在 v2.3 是"连名字都不下发"的那一类；现在写作器看得见、可以用，只是语域限建议口吻，
+    依据标注由系统挂在页上。
+    """
+    user = build_messages(request_for())[1]["content"]
+    assert "lkp-wardrobe-rod" in user
+    assert "【未过门·建议口吻】" in user
 
 
 def test_assertion_budget_split_in_prompt() -> None:
