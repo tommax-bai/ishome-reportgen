@@ -27,7 +27,14 @@ from __future__ import annotations
 
 import re
 
-from reportgen_worker.models import Card, ProvenanceNote, ReportAnchor, ReportDataPackage, Violation
+from reportgen_worker.models import (
+    Card,
+    NarrativeClaim,
+    ProvenanceNote,
+    ReportAnchor,
+    ReportDataPackage,
+    Violation,
+)
 
 PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)\}")
 DIGIT_RE = re.compile(r"[0-9０-９]")
@@ -211,8 +218,27 @@ def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]
     return violations
 
 
-def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) -> list[Violation]:
+def run_unit_gate(
+    cards: list[Card],
+    domain: str,
+    package: ReportDataPackage,
+    claims: list[NarrativeClaim] | None = None,
+) -> list[Violation]:
     violations: list[Violation] = []
+    # 卡片按主张组织（图 v0.2 §3）：卡片多于主张 = 多出来的那张没有主张来源，即又在按落点排版。
+    # **阈值来自推导步自己的产出，不是拍出来的数**——"每单元卡片上限 6~8"那种无据阈值已被撤回
+    # （裁决 2026-08-29）。少于主张数不拦：讲不动的那件事宁可不讲（规则 4.18 宁薄勿撑）。
+    # claims 为 None/空＝没有推导步（老形态与单测夹具），此时不判——不能凭空要求它有主张。
+    if claims and len(cards) > len(claims):
+        violations.append(
+            Violation(
+                check="gate-cards-exceed-claims",
+                detail=(
+                    f"{len(cards)} 张卡多于 {len(claims)} 条主张——一件事一张卡，"
+                    "多出来的那张没有主张来源（按落点一条一张即是这一步要修的形态）"
+                ),
+            )
+        )
     anchor_ids = {a.lkp_id for a in package.domain_anchors(domain)}
     # 断言预算核验仍要它（规则 5.8：谓词 requires 必须全部过可核性门）——v2.4 拆掉的是
     # "主旨句支点必须过门"，不是"断言必须有背书"

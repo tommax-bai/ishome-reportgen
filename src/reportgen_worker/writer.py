@@ -39,6 +39,7 @@ from reportgen_worker.models import (
     Card,
     EvaluationProfile,
     GapRecord,
+    NarrativeClaim,
     PersonaAsset,
     ReportAnchor,
     Violation,
@@ -54,6 +55,11 @@ class WriterRequest(BaseModel):
 
     domain: str
     persona: PersonaAsset
+    claims: list[NarrativeClaim] = []
+    """叙事推导那一步定下的"讲哪几件事"（图 v0.2 §3 第一步产物）：**一条主张一张卡**。
+
+    缺省空＝没有推导（老形态，只在单测夹具里出现）：prompt 退回按落点清单写，那正是
+    "一数一卡"的成因，故生产路径上它恒非空——空的话 activity 已经先失败了。"""
     anchors: list[ReportAnchor]
     gaps: list[GapRecord]
     profile: EvaluationProfile
@@ -153,6 +159,17 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     backed = "、".join(request.backed_predicates) if request.backed_predicates else "（无）"
     # 对照句对是"这么写不行 → 这么写才对"的示范，模型最吃这个形态；放在纪律之后、输出格式之前，
     # 让它先读完规则再看规则长什么样。下发的每一句（含 ✗）都自己过得了机检（见 judgment_pairs）。
+    # 主张是这一稿的骨架（图 v0.2 §3 第一步产物）：一条主张一张卡，正文写"为什么"不复述主旨句。
+    # 真跑立案：没有这一段时，最结构化的输入是落点清单，模型顺着它一一对应，
+    # 23 条落点写成 23 张"念数字"的卡、22/22 正文与主旨句逐字相同（2026-08-29）。
+    claims_discipline = (
+        "8. 下面给了这一章**要讲的几件事**，一件事写一张卡、按给的顺序写，"
+        "不要多写、不要按落点一条一张。主旨句说这件事的结论，"
+        "正文说**为什么是这个数、它管的是哪一刻、放弃了什么**——"
+        "正文与主旨句逐字相同会被打回（那等于这张卡什么都没讲）；\n"
+        if request.claims
+        else ""
+    )
     pairs = judgment_pairs(request.persona, request.banned_terms)
     samples = (
         "这个域里，同一件事这么写不行、这么写才对：\n"
@@ -184,6 +201,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         f"6. 禁词（一个都不能出现）：{banned}\n"
         "7. 没有外部依据或已过期的落点，它的**来源与取数时间由系统自动挂在这一页上**，"
         "你不要在正文里写来源、标准号或日期——写了既是裸数字违规，也会和系统挂的那份对不上；\n"
+        f"{claims_discipline}"
         f"{samples}"
         "输出：JSON 数组，每个元素 "
         '{"thesis": 主旨句, "body": 正文, "number_refs": [引用的 lkp- 列表], '
@@ -199,8 +217,17 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     user_parts = [
         f"领域：{request.domain}",
         "这家人的情况（匿名）：" + json.dumps(request.profile.layout_features, ensure_ascii=False),
-        "可引用的落点对象：\n" + "\n".join(anchor_lines),
     ]
+    if request.claims:
+        user_parts.append(
+            "这一章要讲的几件事（一件一张卡，按此顺序）：\n"
+            + "\n".join(
+                f"{i + 1}. {c.claim}"
+                + (f"（这件事大概会用到：{'、'.join(c.anchors)}）" if c.anchors else "")
+                for i, c in enumerate(request.claims)
+            )
+        )
+    user_parts.append("可引用的落点对象：\n" + "\n".join(anchor_lines))
     if request.unbacked_predicates:
         user_parts.append(
             "这轮**没有背书、不许下结论**的题目（可以描述现象，不能给判断）：\n"

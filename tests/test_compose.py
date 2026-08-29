@@ -8,12 +8,14 @@ import json
 import pytest
 
 from reportgen_worker import activities
+from reportgen_worker.deriver import DeriveRequest, DeriverOutputError
 from reportgen_worker.judge import JudgeRequest
 from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
     Card,
     JudgeObservation,
+    NarrativeClaim,
     Page,
     PageAssembleRequest,
     PageAssembleResult,
@@ -54,6 +56,24 @@ class ScriptedWriter:
         return self._scripts[min(request.attempt, len(self._scripts) - 1)]
 
 
+CLAIMS = [
+    NarrativeClaim(claim="台面高度该按主厨的身体定，不按平均身高", anchors=["lkp-counter-height"]),
+    NarrativeClaim(claim="通道宽度决定两个人能不能同时在厨房里转身", anchors=["lkp-passage-main"]),
+]
+
+
+class ScriptedDeriver:
+    """假推导器：固定返回给定主张，并记录被问了几次（推导每单元只该跑一次）。"""
+
+    def __init__(self, claims: list[NarrativeClaim] | None = None) -> None:
+        self._claims = CLAIMS if claims is None else claims
+        self.seen_requests: list[DeriveRequest] = []
+
+    async def derive(self, request: DeriveRequest) -> list[NarrativeClaim]:
+        self.seen_requests.append(request)
+        return list(self._claims)
+
+
 class ScriptedJudge:
     """假判官：固定返回给定观察，并记录被问了几次（默认不判出任何问题）。"""
 
@@ -73,10 +93,9 @@ FABRICATION = JudgeObservation(
 
 @pytest.fixture(autouse=True)
 def _restore_factories() -> object:
-    original_writer, original_judge = activities.writer_factory, activities.judge_factory
+    originals = (activities.writer_factory, activities.judge_factory, activities.deriver_factory)
     yield
-    activities.writer_factory = original_writer
-    activities.judge_factory = original_judge
+    activities.writer_factory, activities.judge_factory, activities.deriver_factory = originals
 
 
 async def compose(
@@ -84,9 +103,11 @@ async def compose(
     domain: str = "ergonomics",
     package: ReportDataPackage = PACKAGE,
     judge: ScriptedJudge | None = None,
+    deriver: object | None = None,
 ) -> UnitComposeResult:
     activities.writer_factory = lambda: writer
     activities.judge_factory = lambda: judge or ScriptedJudge()
+    activities.deriver_factory = lambda: deriver or ScriptedDeriver()
     raw = await activities.compose_report_unit(UnitComposeRequest(domain=domain, package=package))
     return UnitComposeResult.model_validate(raw)
 
@@ -257,6 +278,60 @@ async def test_assemble_rejects_failed_unit() -> None:
     assert assembled.violations[0].check == "gate-unit-failed"
 
 
+async def test_derivation_runs_once_and_shapes_the_writer_prompt() -> None:
+    """推导每单元只跑一次：重写打回的是"卡片怎么写"，不是"这一章该讲什么"。"""
+    writer = ScriptedWriter([[BAD_CARD], [GOOD_CARD]])
+    deriver = ScriptedDeriver()
+    result = await compose(writer, deriver=deriver)
+
+    assert result.verdict == "ok"
+    assert result.rewrites_used == 1
+    assert len(deriver.seen_requests) == 1  # 两稿共用一次推导
+    assert [c.claim for c in writer.seen_requests[0].claims] == [c.claim for c in CLAIMS]
+    assert result.claims == CLAIMS  # 主张随结果上抛：卡片垮了要分得清是哪一步垮的
+
+
+async def test_derive_failure_retries_then_fails_loudly() -> None:
+    """推导失败不退回"没有主张照样写"——那正是这一步要修的老形态，静默退回＝静默假成功。"""
+
+    class BrokenDeriver:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def derive(self, request: DeriveRequest) -> list[NarrativeClaim]:
+            self.calls += 1
+            raise DeriverOutputError("推导没有产出任何主张")
+
+    deriver = BrokenDeriver()
+    writer = ScriptedWriter([[GOOD_CARD]])
+    result = await compose(writer, deriver=deriver)
+
+    assert result.verdict == "failed"
+    assert [v.check for v in result.violations] == ["gate-narrative-derive-failed"]
+    assert deriver.calls == 3  # 每一轮都重试推导（max_rewrites=2 → 三次机会）
+    assert writer.seen_requests == []  # 没有主张就不写：不烧那次写作调用
+
+
+async def test_cards_exceeding_claims_are_rejected() -> None:
+    """卡片多于主张＝又在按落点一条一张排版（图 v0.2 §3 卡片按主张组织）。
+
+    阈值来自推导步自己的产出，不是拍出来的数——"每单元卡片上限 6~8"那种无据阈值已被撤回。
+    """
+    one_claim = [CLAIMS[0]]
+    writer = ScriptedWriter([[GOOD_CARD, LIGHTING_CARD.model_copy(update={"number_refs": []})]])
+    result = await compose(writer, deriver=ScriptedDeriver(one_claim))
+
+    assert result.verdict == "failed"
+    assert "gate-cards-exceed-claims" in {v.check for v in result.violations}
+
+
+async def test_fewer_cards_than_claims_passes() -> None:
+    """少于主张数不拦：讲不动的那件事宁可不讲（规则 4.18 宁薄勿撑）。"""
+    result = await compose(ScriptedWriter([[GOOD_CARD]]), deriver=ScriptedDeriver(CLAIMS))
+
+    assert result.verdict == "ok"
+
+
 async def test_judge_observations_do_not_change_verdict() -> None:
     """观察态（规则 4.17 门禁二）：判官判出问题也只记录不拦截——verdict 不变、不触发重写。"""
     writer = ScriptedWriter([[GOOD_CARD]])
@@ -298,6 +373,7 @@ async def test_judge_failure_does_not_block_composition() -> None:
 
     activities.writer_factory = lambda: ScriptedWriter([[GOOD_CARD]])
     activities.judge_factory = BrokenJudge
+    activities.deriver_factory = ScriptedDeriver
     raw = await activities.compose_report_unit(
         UnitComposeRequest(domain="ergonomics", package=PACKAGE)
     )

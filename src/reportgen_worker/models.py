@@ -281,6 +281,43 @@ class UnitComposeRequest(BaseModel):
     max_rewrites: int = 2
 
 
+class AnchorBrief(BaseModel):
+    """落点题名：id + 名字 + 量纲，**没有值**——叙事推导那一步唯一看得见的落点信息。
+
+    为什么砍掉值而不是"叮嘱它别写数字"：图 v0.2 §3 要求推导步"只组织怎么讲，不产生任何数字"。
+    把值递过去再要求它别用，是拿 prompt 当门禁；不给值，它**结构性地产不出数字**——同"写作层
+    拿不到锁定文案正文"的分层理由（规则 2.4）。数字是下一步（卡片写作）的事，那一步看得见值。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lkp_id: str
+    name: str
+    unit: str | None = None
+
+    @classmethod
+    def of(cls, anchor: ReportAnchor) -> AnchorBrief:
+        return cls(lkp_id=anchor.lkp_id, name=anchor.name, unit=anchor.unit)
+
+
+class NarrativeClaim(BaseModel):
+    """一条主张 + 它要用的落点（叙事推导的产物，图 v0.2 §3 单元子图第一步）。
+
+    主张是**内部语域**：它说"这一章讲哪几件事、每件事的取舍在哪"，不面向业主、不进产物。
+    卡片按主张组织（一条主张一张卡），这是它存在的全部理由——真跑立案：推导步缺席时，
+    user message 里最结构化的东西就是落点清单，模型顺着它一一对应是最省力解，于是 23 条落点
+    变成 23 张"念数字"的卡（2026-08-29 ergonomics 22/22 正文与主旨句逐字相同）。
+
+    ``anchors`` 是**建议不是强制**：写作那一步仍按本域全部落点校验引用（``gate-number-ref-*``）——
+    推导步看不见值，让它决定"哪条数字能用"是越权；它决定的是"这件事要讲"。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    claim: str
+    anchors: list[str] = []
+
+
 class JudgeCheckCount(BaseModel):
     """一条判据在一次送审里的触发次数（规则 4.17 门禁二的最小计数单元）。
 
@@ -330,6 +367,11 @@ class UnitComposeResult(BaseModel):
     domain: str
     cards: list[Card] = []
     violations: list[Violation] = []
+    claims: list[NarrativeClaim] = []
+    """本单元推导出的主张集（图 v0.2 §3 第一步产物）：**内部语域，不进产物**。
+
+    随结果上抛只为两件事：出问题时看得见"它当时打算讲哪几件事"（卡片退化是推导垮了还是写作垮了，
+    没有这份东西分不开）；以及自迭代回路采样。渲染层不消费它——业主看到的是卡片。"""
     observations: list[JudgeObservation] = []
     judge_run: JudgeRun | None = None
     """本次送审的计数台账（``None`` = 判官没跑：本域无判官判据，或规则层就没放行）。

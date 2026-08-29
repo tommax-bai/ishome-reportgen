@@ -24,6 +24,12 @@ from typing import Any
 
 from temporalio import activity
 
+from reportgen_worker.deriver import (
+    DeriveRequest,
+    DeriverOutputError,
+    LlmNarrativeDeriver,
+    NarrativeDeriver,
+)
 from reportgen_worker.gate import (
     annotation_required_anchors,
     backed_predicates,
@@ -43,10 +49,12 @@ from reportgen_worker.judge import (
     observe,
 )
 from reportgen_worker.models import (
+    AnchorBrief,
     BookCheckRequest,
     BookCheckResult,
     JudgeObservation,
     JudgeRun,
+    NarrativeClaim,
     Page,
     PageAssembleRequest,
     PageAssembleResult,
@@ -108,14 +116,23 @@ def default_judge_factory() -> Judge:
     return LlmJudge()
 
 
-# 测试注入点：monkeypatch 本工厂即可替换写作器/判官（activity 入参保持纯数据）
+def default_deriver_factory() -> NarrativeDeriver:
+    return LlmNarrativeDeriver()
+
+
+# 测试注入点：monkeypatch 本工厂即可替换写作器/判官/推导器（activity 入参保持纯数据）
 writer_factory: Callable[[], CardWriter] = default_writer_factory
 judge_factory: Callable[[], Judge] = default_judge_factory
+deriver_factory: Callable[[], NarrativeDeriver] = default_deriver_factory
 
 
 @activity.defn(name="report-unit-compose")
 async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
-    """单元成文：卡片写作（LLM）→ 出口过检·规则层 → **判官层** → 重写循环 → ok/failed verdict。
+    """单元成文：**叙事推导** → 卡片写作（LLM）→ 出口过检·规则层 → **判官层** → 重写循环 → verdict。
+
+    推导与写作是两次调用两个语域（图 v0.2 §3）：先定"这一域讲哪几件事"（内部语域、看不见落点的值），
+    再按主张写卡（客户语域、数字只经占位引用）。塌成一步的代价实测过——落点清单成了唯一结构化输入，
+    模型顺着它一一对应，23 条落点写成 23 张"念数字"的卡（2026-08-29 真跑）。
 
     判官在单元子图内、规则层之后（图 v0.2 §3），**不注册新 activity**——它是这一步的一部分，
     不是一次派发。只在规则层放行后才跑：规则层没过的稿子还要重写，先烧一次判官调用没有意义。
@@ -123,12 +140,15 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     domain, package = request.domain, request.package
     observations: list[JudgeObservation] = []
     judge_run: JudgeRun | None = None
+    claims: list[NarrativeClaim] = []
 
     def failed(violations: list[Violation], rewrites: int = 0) -> ActivityResult:
         return UnitComposeResult(
             verdict="failed",
             domain=domain,
             violations=violations,
+            # 主张随失败结果一并上抛：卡片垮了要分得清是"讲什么"没定好还是"怎么写"没写好
+            claims=claims,
             observations=observations,
             # 判官跑过就记，哪怕这一稿后来被打回：观察态的"份"是**送审一次**，不是"发出去一份"
             judge_run=judge_run,
@@ -166,13 +186,34 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
 
     writer = writer_factory()
     judge = judge_factory()
+    deriver = deriver_factory()
     checks = judge_checks(domain, package)
     blocking = blocking_check_ids(domain, package)
     feedback: list[Violation] = []
     for attempt in range(request.max_rewrites + 1):
+        # 叙事推导（图 v0.2 §3 第一步）：只跑一次，重写循环重跑的是写作不是推导——
+        # 打回的理由是卡片怎么写，不是这一章该讲什么。推导本身失败才重来（网关抖动/输出不可解析）。
+        if not claims:
+            try:
+                claims = await deriver.derive(
+                    DeriveRequest(
+                        domain=domain,
+                        identity=personas[0].identity,
+                        anchors=[AnchorBrief.of(a) for a in anchors],
+                        gaps=package.gaps,
+                        profile=package.anonymous_profile,
+                        backed_predicates=backed_predicates(domain, package),
+                        unbacked_predicates=unbacked_predicates(domain, package),
+                    )
+                )
+            except DeriverOutputError as e:
+                # 不退回"没有主张照样写"：那正是这一步要修的老形态，静默退回＝静默假成功
+                feedback = [Violation(check="gate-narrative-derive-failed", detail=str(e))]
+                continue
         writer_request = WriterRequest(
             domain=domain,
             persona=personas[0],
+            claims=claims,
             anchors=anchors,
             gaps=package.gaps,
             profile=package.anonymous_profile,
@@ -190,7 +231,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
         # 空卡片组不算过检：run_unit_gate 逐卡片跑，没有卡片自然没有违规——"什么都不写"会成为
         # 绕过全部门禁最省事的路径（真跑 2026-08-28 即出现：全域降档后模型交了空数组）。
         # 失败必须在源头响亮报出，不靠下游装配/册检兜住（图 v0.2 §3 绝不静默假成功）。
-        feedback = run_unit_gate(cards, domain, package)
+        feedback = run_unit_gate(cards, domain, package, claims)
         if not feedback and not cards:
             feedback = [
                 Violation(check="gate-empty-composition", detail=f"{domain} 未产出任何卡片")
@@ -216,6 +257,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     verdict="ok",
                     domain=domain,
                     cards=cards,
+                    claims=claims,
                     observations=observations,
                     judge_run=judge_run,
                     rewrites_used=attempt,

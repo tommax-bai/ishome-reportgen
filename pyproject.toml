@@ -66,9 +66,13 @@ root_packages = ["reportgen_worker"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "worker 内 worker → activities → writer|judge → gate → models 单向"
+name = "worker 内 worker → activities → deriver|writer|judge → gate → models 单向"
 type = "layers"
-# writer 与 judge 同层且互不可见（"|" = independent siblings）：判官与写作器共享任何东西都是
-# 同源漂移的入口——判官只能拿 release 数据判，不许复用写作器的 prompt 素材（规则 4.17）。
-layers = ["worker", "activities", "writer | judge", "gate", "models"]
+# deriver / writer / judge 三者同层且**互不可见**（"|" = independent siblings），由 activities 串起来：
+#   - 判官与写作器共享任何东西都是同源漂移的入口——判官只能拿 release 数据判，不许复用写作器的
+#     prompt 素材（规则 4.17）；
+#   - 推导器（叙事推导，图 v0.2 §3 第一步）与写作器是**两个语域**：推导是内部语域、看不见落点的值，
+#     写作是客户语域、数字只经占位引用。两步塌成一步的代价实测过（23 条落点写成 23 张"念数字"的卡），
+#     模块不可见是那条分界在代码里的形态。
+layers = ["worker", "activities", "deriver | writer | judge", "gate", "models"]
 containers = ["reportgen_worker"]
