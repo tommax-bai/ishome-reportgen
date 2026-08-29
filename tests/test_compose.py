@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import copy
 import json
+import pathlib
 
 import pytest
 
 from reportgen_worker import activities
-from reportgen_worker.deriver import DeriveRequest, DeriverOutputError
+from reportgen_worker.deriver import DeriveRequest, DeriverOutputError, NarrativeDeriver
 from reportgen_worker.judge import JudgeRequest
 from reportgen_worker.models import (
     BookCheckRequest,
@@ -103,7 +104,7 @@ async def compose(
     domain: str = "ergonomics",
     package: ReportDataPackage = PACKAGE,
     judge: ScriptedJudge | None = None,
-    deriver: object | None = None,
+    deriver: NarrativeDeriver | None = None,
 ) -> UnitComposeResult:
     activities.writer_factory = lambda: writer
     activities.judge_factory = lambda: judge or ScriptedJudge()
@@ -384,7 +385,9 @@ async def test_judge_failure_does_not_block_composition() -> None:
     assert result.observations == []
 
 
-async def test_judge_run_ledger_records_counts(tmp_path, monkeypatch) -> None:
+async def test_judge_run_ledger_records_counts(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """计数载体（裁决 2026-08-29）：一次送审记一行——判据 × 份 × 批大小 × 触发。
 
     台账是规则 4.17 门禁二唯一的数据来源；没有它，"0 命中"与"根本没问成"在统计里长得一样。
@@ -415,7 +418,9 @@ async def test_judge_run_absent_when_judge_never_ran() -> None:
     assert result.judge_run is None
 
 
-async def test_ledger_write_failure_does_not_block_composition(monkeypatch) -> None:
+async def test_ledger_write_failure_does_not_block_composition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """台账写不进去只是观察数据的损失，不是这份内容的事故（同"判官不阻塞"的同一条理由）。"""
     monkeypatch.setenv(activities.JUDGE_LEDGER_ENV, "/nonexistent-dir/judge.jsonl")
 
