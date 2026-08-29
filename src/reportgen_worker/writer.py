@@ -180,6 +180,8 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         f"5. 判断句只允许落在这几个题目上：{backed}。"
         "写了判断句就在 assertions 里声明用的是哪一个；其余题目这轮没有背书，不许下结论；\n"
         f"6. 禁词（一个都不能出现）：{banned}\n"
+        "7. 没有外部依据或已过期的落点，它的**来源与取数时间由系统自动挂在这一页上**，"
+        "你不要在正文里写来源、标准号或日期——写了既是裸数字违规，也会和系统挂的那份对不上；\n"
         f"{samples}"
         "输出：JSON 数组，每个元素 "
         '{"thesis": 主旨句, "body": 正文, "number_refs": [引用的 lkp- 列表], '

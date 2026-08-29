@@ -6,11 +6,12 @@
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
   占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名、语域示范不得被逐字抄进正文。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
-- **降档门禁（gate-thesis-\\* / gate-assertion-\\* / gate-withheld-\\*）**：规则 4.10/4.10a/5.8
-  的消费侧强制。档位判定由求值线做完（anchors[].presentation），本层只做**可确定性判定**的
-  三件事：①主旨句引用的落点必须全部是 THESIS_SUPPORT；②卡片声明的断言预算谓词必须在本域
-  persona 的 assertion_budget 内，且其 requires 的 lkp- 全部已求值且非降档；③被隐藏的落点
-  一律不得被引用，也不该出现在 anchors 里。
+- **语域与标注门禁（gate-thesis-\\* / gate-assertion-\\* / gate-provenance-\\*）**：规则
+  4.10a/4.10c/5.8 的消费侧强制。判定由求值线做完（anchors[].presentation 与
+  anchors[].provenance.annotationRequired），本层只做**可确定性判定**的事：①主旨句引用的落点必须
+  全部是 THESIS_SUPPORT；②卡片声明的断言预算谓词必须在本域 persona 的 assertion_budget 内，
+  且其 requires 的 lkp- 全部已求值且非降档；③未过门/已过期落点被引用时，同页必须挂它的依据标注
+  （规则 4.10c 标注必挂，v2.4 起替代隐藏档；页级比对在册级 :mod:`reportgen_worker.activities`）。
   **明确不做的**：判断句的语义识别——"这句话算不算判断句"没有确定性判据，机检不假实现。
   未声明 assertions 却写成判断句、参考口吻被写成断言口吻，全部归**判官层**（分域反例库，
   图 v0.2 §3 出口过检·判官层）。本层只保证"声明了就必须有背书"，不保证"没声明就不是断言"。
@@ -22,7 +23,7 @@ from __future__ import annotations
 
 import re
 
-from reportgen_worker.models import Card, ReportDataPackage, Violation
+from reportgen_worker.models import Card, ProvenanceNote, ReportAnchor, ReportDataPackage, Violation
 
 PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)\}")
 DIGIT_RE = re.compile(r"[0-9０-９]")
@@ -60,6 +61,7 @@ CHINESE_NUMBER_RE = re.compile(
 
 THESIS_SUPPORT = "THESIS_SUPPORT"
 WITHHELD = "WITHHELD"
+CALIBRATED = "calibrated"
 
 # persona 判断句样例（规则 4.13 之②）进 prompt 后的真跑副作用（2026-08-28）：模型把 ✓ 示范句
 # **逐字抄进卡片**当成这家人的结论——示范是"怎么讲"的样本，不是"讲什么"的素材，抄过去就成了
@@ -92,6 +94,44 @@ def judgment_good_texts(domain: str, package: ReportDataPackage) -> list[str]:
             if isinstance(good, str) and len(good.strip()) >= MIN_SAMPLE_LENGTH:
                 texts.append(good.strip())
     return sorted(set(texts))
+
+
+def annotation_required_anchors(package: ReportDataPackage) -> dict[str, ReportAnchor]:
+    """全册范围内"进正文就必须随页标注"的落点（规则 4.10c）：lkp_id → 落点。
+
+    **不切域**：册级校验按页比对，而页是按域成的——切域会让"某页引用了别域落点"这种情况漏检。
+    要求集的口径是落点自己的 ``provenance``，不是页、不是卡片：谁被引用了谁就得有标注。
+    """
+    return {a.lkp_id: a for a in package.anchors if a.requires_annotation}
+
+
+def provenance_note(anchor: ReportAnchor) -> ProvenanceNote:
+    """落点 → 页上的依据标注（纯投影，零生成：字段原样搬，不拼接、不改写、不补空）。"""
+    provenance = anchor.provenance
+    return ProvenanceNote(
+        lkp_id=anchor.lkp_id,
+        source=provenance.source if provenance is not None else anchor.source,
+        effective_from=provenance.effective_from if provenance is not None else None,
+        effective_to=provenance.effective_to if provenance is not None else None,
+        calibration=provenance.calibration if provenance is not None else anchor.calibration,
+    )
+
+
+def required_provenance_notes(
+    cards: list[Card], domain: str, package: ReportDataPackage
+) -> list[ProvenanceNote]:
+    """本稿卡片实际引用的落点里，需要标注的那些（按 lkp_id 升序，确定性）。
+
+    引用面取 ``number_refs`` 与正文占位符的**并集**：两者不一致本身是违规
+    （``gate-number-ref-undeclared``），但标注要求不能等违规先被修好——过检没过的稿子不会成页，
+    过了检的两者必然一致，取并集只是让本函数与门禁的执行次序无关。
+    """
+    required = annotation_required_anchors(package)
+    referenced: set[str] = set()
+    for card in cards:
+        referenced |= set(card.number_refs)
+        referenced |= set(PLACEHOLDER_RE.findall(f"{card.thesis}\n{card.body}"))
+    return [provenance_note(required[ref]) for ref in sorted(referenced & set(required))]
 
 
 def assertion_budget(domain: str, package: ReportDataPackage) -> dict[str, list[str]]:
@@ -134,9 +174,16 @@ def unbacked_predicates(domain: str, package: ReportDataPackage) -> list[str]:
 
 
 def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]:
-    """写作前的生产方契约守卫：数据包本身违约的，不必烧一次 LLM 调用才发现。"""
+    """写作前的生产方契约守卫：数据包本身违约的，不必烧一次 LLM 调用才发现。
+
+    v2.4 起守的是**标注纪律的上游**：求值线声称某落点不必标注，但它根本没过可核性门——
+    这一条若放过去，页级比对门禁会跟着一起放过（要求集是从 provenance 读的），
+    整条标注链路就被生产侧一个字段悄悄关掉了。故在最前面拦一次，方向偏严。
+    """
     violations: list[Violation] = []
     for anchor in package.anchors:
+        # 隐藏档的旧守卫（规则 4.10 v2.3）：v2.4 已取消隐藏，**本条随拆分支一并删**——
+        # 规范写死的实现纪律是"先建标注链路，再拆隐藏分支"，故它在本轮仍在岗。
         if anchor.presentation == WITHHELD:
             violations.append(
                 Violation(
@@ -144,6 +191,29 @@ def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]
                     detail=(
                         f"{anchor.lkp_id} 判为隐藏却随包下发了值——隐藏即不下发"
                         "（规则 4.10；求值线降档纪律的输出违约）"
+                    ),
+                )
+            )
+        provenance = anchor.provenance
+        if provenance is None:
+            continue
+        if provenance.calibration != anchor.calibration:
+            violations.append(
+                Violation(
+                    check="gate-provenance-inconsistent",
+                    detail=(
+                        f"{anchor.lkp_id} provenance.calibration={provenance.calibration} "
+                        f"与落点 calibration={anchor.calibration} 不一致——两处同源，不该有两个答案"
+                    ),
+                )
+            )
+        elif not provenance.annotation_required and provenance.calibration != CALIBRATED:
+            violations.append(
+                Violation(
+                    check="gate-provenance-inconsistent",
+                    detail=(
+                        f"{anchor.lkp_id} 未过可核性门（{provenance.calibration}）却标称无需标注"
+                        "——标注必挂是硬约束（规则 4.10c），生产侧判定违约"
                     ),
                 )
             )

@@ -29,14 +29,36 @@ class ReleaseRef(_PackageModel):
     release_tag: str
 
 
+class AnchorProvenance(_PackageModel):
+    """落点依据（规则 4.10c「标注必挂」，v2.4 裁决 2026-08-29）：这个数从哪来、什么时候取的。
+
+    ``annotation_required`` 是**强制**：判定在求值线做完（未过可核性门，或 ``effective_to`` 早于
+    本次求值基准日），成文线只执行不重判——与 ``presentation`` 同机制。
+
+    ``source`` 为 ``None`` **是事实不是缺失**：规则 4.10 的"经验条目"就是"无外部依据、靠行业判断"，
+    标注照挂，由渲染层说明这是经验判断——**禁编造一个来源**（规范 §12）。
+
+    时效两字段保持字符串（ISO 日期）不转 ``date``：越界与否已在生产侧判完，消费侧不做日期运算，
+    只把它原样交给渲染层；转类型只会给 activity 出参的 JSON 序列化添一处无谓的坑。
+    """
+
+    source: str | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+    calibration: str
+    annotation_required: bool
+
+
 class ReportAnchor(_PackageModel):
     """落点对象：成文线数字字段唯一合法来源。
 
-    ``degraded`` 是标记（未过可核性门），``presentation`` 是强制——求值线按产物权益档判定的
-    呈现档位（规则 4.10）：``THESIS_SUPPORT`` 可作判断句支点、``REFERENCE_ONLY`` 只可参考口吻。
-    ``WITHHELD`` 本不该出现在 anchors 里（求值线判隐藏的落点根本不下发），此处仍收下它是为了
-    **宽进严查**：由 :func:`reportgen_worker.gate.run_package_gate` 报一条读得懂的生产方违约，
-    而不是让整包解析崩在 pydantic 里。
+    三字段分工：``degraded`` 是标记（未过可核性门）；``presentation`` 是**语域强制**——
+    ``THESIS_SUPPORT`` 可作判断句支点、``REFERENCE_ONLY`` 语域限建议口吻（规则 4.10a/5.8）；
+    ``provenance`` 是**标注强制**——未过门或已过期的落点进正文，同页必须挂依据标注（规则 4.10c）。
+
+    v2.4 裁决 2026-08-29 取消了"隐藏"这一档，故 ``presentation`` 不再有 ``WITHHELD``：
+    枚举值收窄是**故意的严**——真收到一个 WITHHELD，说明生产方还停在 v2.3 在隐藏落点，
+    那时整包解析失败比放它进来更安全（隐藏本身已是违约，而不再是纪律）。
     """
 
     lkp_id: str
@@ -48,15 +70,27 @@ class ReportAnchor(_PackageModel):
     source: str | None = None
     calibration: str
     degraded: bool
+    provenance: AnchorProvenance | None = None
     presentation: Literal["THESIS_SUPPORT", "REFERENCE_ONLY", "WITHHELD"]
+
+    @property
+    def requires_annotation(self) -> bool:
+        """本落点进正文是否必须随页挂依据标注（规则 4.10c）。
+
+        ``provenance`` 缺席 = 生产方未升级到 v2.4：回退按 ``calibration`` 判，**方向偏严**
+        （宁可多标一条，不可漏标一条）——漏标是纪律失效，多标只是页脚多一行。
+        """
+        if self.provenance is not None:
+            return self.provenance.annotation_required
+        return self.calibration != "calibrated"
 
 
 class WithheldAnchor(_PackageModel):
-    """按规则 4.10 隐藏掉的落点：只有 id/来源/原因，无值——隐藏即内容不下发。
+    """**已作废、恒空**（v2.4 裁决 2026-08-29，规范 §14.9 取消隐藏档）。
 
-    与 :class:`GapRecord` 分列：gap- 是"求不出"（补公式或补输入），withheld 是"求出了但纪律
-    不许发"（补外部依据把条目转正），两条回流信号不混。成文线用它把"引用了被隐藏的落点"打回
-    成一条说得清的违规，而不是笼统的"引用不存在"。
+    字段按契约"只增不删"保留（生产方恒发空数组），消费侧**不得据此拦截**：未校准与已过期的
+    落点现在照常进正文，纪律改由 :class:`AnchorProvenance` 的"标注必挂"承接。原语义：按规则 4.10
+    隐藏掉的落点审计（只有 id/来源/原因，无值）。
     """
 
     lkp_id: str
@@ -135,6 +169,9 @@ class ReportDataPackage(_PackageModel):
     """
 
     entitlement: Literal["FREE", "PAID"]
+    evaluated_on: str | None = None
+    """本次求值的基准日（as-of）：时效越界的判定基准，判定已在求值线做完、随包下发故可重放。
+    成文线**只搬运不重算**——按运行时当天重判等于让同一份包在两天里过检结果不同。"""
     domains: list[str]
     releases: list[ReleaseRef]
     anchors: list[ReportAnchor]
@@ -182,6 +219,27 @@ class Card(BaseModel):
     body: str
     number_refs: list[str] = []
     assertions: list[str] = []
+
+
+class ProvenanceNote(BaseModel):
+    """页上挂的**依据标注**（规则 4.10c 标注必挂，v2.4）：来源 + 取数时间 + 可核性状态。
+
+    **结构化数据，不是文案**：正文由渲染层按这几个字段出（规则 2.4 gen-locked"引用 ID 或结构化
+    数据直接渲染，零生成"），成文线不拼接、不改写、不翻译。载体在**页**不在卡片，与锁定文案同理——
+    "这一页上必须有这条标注"是页级装配契约；放到 :class:`Card` 上就等于交给写作层产出，而标注里
+    全是数字（取数时间），写作器结构性地写不出来（卡片正文禁裸数字）。
+
+    ``source=None`` 是经验条目的**事实**（规则 4.10 无外部依据、靠行业判断），不是待填的洞：
+    渲染层据此说明"这是我们的经验判断"，禁编造来源。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lkp_id: str
+    source: str | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+    calibration: str
 
 
 class Violation(BaseModel):
@@ -232,6 +290,13 @@ class UnitComposeResult(BaseModel):
     observations: list[JudgeObservation] = []
     rewrites_used: int = 0
     releases: list[ReleaseRef] = []
+    required_provenance: list[ProvenanceNote] = []
+    """本单元**实际引用**的落点里需要标注的那些（规则 4.10c）：按 lkp_id 升序。
+
+    与 ``required_locked_texts`` 同一条路：单元只**投影**不产出（内容全部来自落点的 provenance），
+    挂载在装配层、校验在册级。与锁定文案的区别在于要求集从哪来——锁定文案的要求集随包给定，
+    标注的要求集取决于**这一稿实际引用了哪几个落点**，只有写完卡片才知道，故必须在单元算。
+    """
     required_locked_texts: list[str] = []
     """本域必挂的锁定文案 ID（自包内 ``locked_texts_by_domain`` 切片**原样透传**）。
 
@@ -257,6 +322,11 @@ class Page(BaseModel):
     page_type: str | None = None
     cards: list[Card]
     locked_text_ids: list[str] = []
+    provenance_notes: list[ProvenanceNote] = []
+    """本页挂的依据标注（规则 4.10c 标注必挂，v2.4）：页上引用了未过门/已过期落点，就得有它。
+
+    它是隐藏禁令的等价物——拦截点从"说出来"移到"不标就说"。挂载在装配层（确定性投影），
+    该挂没挂由册级校验按数据包这个独立来源报出（``gate-provenance-annotation-missing``）。"""
 
 
 class PageAssembleRequest(BaseModel):

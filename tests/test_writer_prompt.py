@@ -138,3 +138,13 @@ def test_empty_string_pair_is_skipped() -> None:
 def test_locked_texts_never_reach_the_writer() -> None:
     """gen-locked 零生成（规则 2.4）：锁定文案 ID 一个字都不进写作 prompt——挂载是装配层的事。"""
     assert all("DISCLAIM" not in m["content"] for m in build_messages(request_for("lighting")))
+
+
+def test_prompt_hands_annotation_duty_to_the_system() -> None:
+    """标注由系统挂在页上（规则 4.10c，v2.4）——写作器不写来源与日期，写了必被打回。
+
+    这不是礼貌提示：标注里全是日期，正文禁裸数字，写作器**结构性地**产不出合规的标注，
+    让它试等于白烧一轮重写。
+    """
+    system = build_messages(request_for())[0]["content"]
+    assert "由系统自动挂在这一页上" in system

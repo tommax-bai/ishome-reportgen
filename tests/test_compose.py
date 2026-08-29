@@ -16,6 +16,7 @@ from reportgen_worker.models import (
     Page,
     PageAssembleRequest,
     PageAssembleResult,
+    ProvenanceNote,
     ReportDataPackage,
     UnitComposeRequest,
     UnitComposeResult,
@@ -329,3 +330,76 @@ async def test_empty_card_set_fails_at_unit_level() -> None:
     assert result.verdict == "failed"
     assert "gate-empty-composition" in {v.check for v in result.violations}
     assert not result.cards
+
+
+# ---------------------------------------------------------------------------
+# 标注链路（规则 4.10c 标注必挂，v2.4）：单元投影 → 装配挂载 → 册级比对
+# ---------------------------------------------------------------------------
+
+COUNTER_NOTE = ProvenanceNote(lkp_id="lkp-counter-height", source="行业通行", calibration="draft")
+
+
+async def test_provenance_note_flows_unit_to_page_to_book() -> None:
+    """整条链路一次跑通：单元按引用投影出要求 → 装配挂上页 → 册级比对通过。"""
+    unit = await compose(ScriptedWriter([[GOOD_CARD]]))
+    assert unit.required_provenance == [COUNTER_NOTE]
+    # 过门落点无需标注：lighting 那页页脚是空的（标注不是每个数都加一行）
+    lighting_unit = await compose(ScriptedWriter([[LIGHTING_CARD]]), domain="lighting")
+    assert lighting_unit.required_provenance == []
+
+    assembled = PageAssembleResult.model_validate(
+        await activities.assemble_report_pages(PageAssembleRequest(units=[unit, lighting_unit]))
+    )
+    mounted = {p.domain: p.provenance_notes for p in assembled.pages}
+    assert mounted == {"ergonomics": [COUNTER_NOTE], "lighting": []}
+
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=assembled.pages, package=PACKAGE))
+    )
+    assert book.verdict == "ok"
+
+
+async def test_book_check_reports_unannotated_anchor() -> None:
+    """隐藏禁令的等价物：未过门的数进了正文却没标依据 → 渲染前拦住（拦截点=不标就说）。"""
+    page = Page(page_id="page-ergonomics", domain="ergonomics", cards=[GOOD_CARD])
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=[page], package=PACKAGE))
+    )
+
+    assert book.verdict == "failed"
+    missing = [v for v in book.violations if v.check == "gate-provenance-annotation-missing"]
+    assert len(missing) == 1
+    assert "lkp-counter-height" in missing[0].detail
+
+
+async def test_book_check_reports_tampered_annotation() -> None:
+    """标注被中间层改写等于没标：业主据以判断这个数有多硬的，必须是求值线给的那份事实。"""
+    page = Page(
+        page_id="page-ergonomics",
+        domain="ergonomics",
+        cards=[GOOD_CARD],
+        provenance_notes=[
+            ProvenanceNote(lkp_id="lkp-counter-height", source="国标", calibration="calibrated")
+        ],
+    )
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=[page], package=PACKAGE))
+    )
+
+    assert book.verdict == "failed"
+    assert "gate-provenance-note-mismatch" in {v.check for v in book.violations}
+
+
+async def test_calibrated_anchor_needs_no_annotation() -> None:
+    """过门的数不必标：标注是"这条有多硬"的说明，不是每个数都加一行页脚。"""
+    page = Page(
+        page_id="page-lighting",
+        domain="lighting",
+        cards=[LIGHTING_CARD],
+        locked_text_ids=["DISCLAIM_P1"],
+    )
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=[page], package=PACKAGE))
+    )
+
+    assert "gate-provenance-annotation-missing" not in {v.check for v in book.violations}

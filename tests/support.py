@@ -8,6 +8,8 @@ from reportgen_worker.models import ReportDataPackage
 
 PACKAGE_JSON: dict[str, Any] = {
     "entitlement": "PAID",
+    # 求值基准日（v2.4）：时效越界判定的基准随包下发，成文线不看运行时时钟
+    "evaluatedOn": "2026-08-29",
     "domains": ["ergonomics", "lighting"],
     "releases": [
         {"domain": "ergonomics", "releaseTag": "ergonomics@v1"},
@@ -24,6 +26,14 @@ PACKAGE_JSON: dict[str, Any] = {
             "source": "行业通行",
             "calibration": "draft",
             "degraded": True,
+            # 标注必挂（规则 4.10c，v2.4）：未过门 → 进正文就得同页标出来源与取数时间
+            "provenance": {
+                "source": "行业通行",
+                "effectiveFrom": None,
+                "effectiveTo": None,
+                "calibration": "draft",
+                "annotationRequired": True,
+            },
             "presentation": "REFERENCE_ONLY",
         },
         {
@@ -36,6 +46,13 @@ PACKAGE_JSON: dict[str, Any] = {
             "source": "GB 50352 条文",
             "calibration": "calibrated",
             "degraded": False,
+            "provenance": {
+                "source": "GB 50352 条文",
+                "effectiveFrom": "2019-09-01",
+                "effectiveTo": None,
+                "calibration": "calibrated",
+                "annotationRequired": False,
+            },
             "presentation": "THESIS_SUPPORT",
         },
         {
@@ -48,6 +65,13 @@ PACKAGE_JSON: dict[str, Any] = {
             "source": "GB 50034-2013 表5.2.1；GB/T 50034-2024 同值",
             "calibration": "calibrated",
             "degraded": False,
+            "provenance": {
+                "source": "GB 50034-2013 表5.2.1；GB/T 50034-2024 同值",
+                "effectiveFrom": "2024-10-01",
+                "effectiveTo": None,
+                "calibration": "calibrated",
+                "annotationRequired": False,
+            },
             "presentation": "THESIS_SUPPORT",
         },
     ],

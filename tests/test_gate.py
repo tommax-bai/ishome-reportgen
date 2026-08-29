@@ -5,9 +5,11 @@ from __future__ import annotations
 import copy
 
 from reportgen_worker.gate import (
+    annotation_required_anchors,
     assertion_budget,
     backed_predicates,
     collect_banned_terms,
+    required_provenance_notes,
     run_package_gate,
     run_unit_gate,
     unbacked_predicates,
@@ -325,3 +327,84 @@ def test_short_sample_does_not_over_block() -> None:
     assert "gate-sample-verbatim-copy" not in checks_of(
         run_unit_gate([card], "ergonomics", package)
     )
+
+
+# ---------------------------------------------------------------------------
+# 标注纪律（规则 4.10c，v2.4）：隐藏档取消后，"说了就必须标"的消费侧一半
+# ---------------------------------------------------------------------------
+
+
+def test_annotation_requirement_reads_provenance() -> None:
+    """要求集口径是落点自己的 provenance：未过门的要标、过门的不要标。"""
+    assert set(annotation_required_anchors(PACKAGE)) == {"lkp-counter-height"}
+
+
+def test_annotation_requirement_falls_back_without_provenance() -> None:
+    """老包（生产方未升级）无 provenance → 按 calibration 回退，**方向偏严**：宁可多标不可漏标。"""
+    legacy = copy.deepcopy(PACKAGE_JSON)
+    legacy["anchors"][0].pop("provenance")
+    package = ReportDataPackage.model_validate(legacy)
+
+    assert set(annotation_required_anchors(package)) == {"lkp-counter-height"}
+
+
+def test_provenance_notes_cover_only_referenced_anchors() -> None:
+    """标注跟着**引用**走，不是把包里所有未过门落点都堆到页脚——没提到的数不需要标。"""
+    referenced = Card(
+        thesis="操作台高度跟着主厨的身体走。",
+        body="台面高按 {lkp-counter-height} 做。",
+        number_refs=["lkp-counter-height"],
+    )
+    untouched = Card(
+        thesis="主通道要留得开。",
+        body="净宽按 {lkp-passage-main} 走。",
+        number_refs=["lkp-passage-main"],
+    )
+
+    assert [n.lkp_id for n in required_provenance_notes([referenced], "ergonomics", PACKAGE)] == [
+        "lkp-counter-height"
+    ]
+    assert required_provenance_notes([untouched], "ergonomics", PACKAGE) == []
+
+
+def test_provenance_note_carries_source_and_calibration_verbatim() -> None:
+    """标注是**投影**不是生成：来源与状态逐字取自包内，成文线不拼接、不补空、不改写。"""
+    card = Card(
+        thesis="操作台高度跟着主厨的身体走。",
+        body="台面高按 {lkp-counter-height} 做。",
+        number_refs=["lkp-counter-height"],
+    )
+    note = required_provenance_notes([card], "ergonomics", PACKAGE)[0]
+
+    assert note.source == "行业通行"
+    assert note.calibration == "draft"
+    assert note.effective_from is None
+
+
+def test_package_gate_rejects_unbacked_anchor_claiming_no_annotation() -> None:
+    """生产方声称"不用标"但根本没过可核性门 → 整条标注链路会被一个字段悄悄关掉，故前置拦一次。"""
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["anchors"][0]["provenance"]["annotationRequired"] = False
+    violations = run_package_gate("ergonomics", ReportDataPackage.model_validate(tainted))
+
+    assert checks_of(violations) == {"gate-provenance-inconsistent"}
+
+
+def test_package_gate_rejects_calibration_drift_between_two_carriers() -> None:
+    """平铺 calibration 与 provenance.calibration 同源，出现两个答案即生产方违约。"""
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["anchors"][0]["provenance"]["calibration"] = "calibrated"
+    violations = run_package_gate("ergonomics", ReportDataPackage.model_validate(tainted))
+
+    assert checks_of(violations) == {"gate-provenance-inconsistent"}
+
+
+def test_package_gate_accepts_expired_but_flagged_anchor() -> None:
+    """过期的过门条目照常下发（规则 5.15，v2.4 推翻"只出占比"）——标了就合规，不再有隐藏档。"""
+    expired = copy.deepcopy(PACKAGE_JSON)
+    expired["anchors"][1]["provenance"]["effectiveTo"] = "2026-06-30"
+    expired["anchors"][1]["provenance"]["annotationRequired"] = True
+    package = ReportDataPackage.model_validate(expired)
+
+    assert run_package_gate("ergonomics", package) == []
+    assert set(annotation_required_anchors(package)) == {"lkp-counter-height", "lkp-passage-main"}
