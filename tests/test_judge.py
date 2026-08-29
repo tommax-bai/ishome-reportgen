@@ -107,24 +107,84 @@ def test_parse_tolerates_garbage_output() -> None:
 
 
 async def test_observe_swallows_judge_failure() -> None:
-    """判官挂掉 → 空观察，不抛出：判官不可用不能把能发的内容毙掉。"""
+    """判官挂掉 → 空观察，不抛出：判官不可用不能把能发的内容毙掉。台账仍记，且记下丢了几批。"""
 
     class BrokenJudge:
         async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
             raise RuntimeError("网关 502")
 
-    assert await observe(BrokenJudge(), make_request()) == []
+    observations, run = await observe(BrokenJudge(), make_request())
+    assert observations == []
+    assert run is not None
+    # "问不成"与"很干净"必须在数据上分得开——这正是台账存在的理由
+    assert run.batches_failed == run.batches == 1
+    assert [c.hits for c in run.checks] == [0]
 
 
 async def test_observe_skips_call_when_no_judge_checks() -> None:
-    """本域无判官判据 → 一次调用都不发（冷启动期判官库很薄是常态，规则 4.18 宁薄勿撑）。"""
+    """本域无判官判据 → 一次调用都不发（冷启动期判官库很薄是常态，规则 4.18 宁薄勿撑）。
+
+    没送审就没有"份"：台账为 None，不记一条 0 命中——那会把"没问过"混进触发率的分母。
+    """
 
     class ExplodingJudge:
         async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
             raise AssertionError("无判据时不应调用判官")
 
     request = make_request()
-    assert await observe(ExplodingJudge(), request.model_copy(update={"checks": []})) == []
+    assert await observe(ExplodingJudge(), request.model_copy(update={"checks": []})) == ([], None)
+
+
+async def test_observe_batches_cards_and_counts_per_check() -> None:
+    """分批送审（真跑实测：22 张一次问 0 命中、前 6 张问出 6 条），并按判据计数。
+
+    这里只钉**分批这件事发生了**与**计数口径**；N 取多少要等对照跑的数据（裁决⑨"有数据再定"）。
+    """
+    seen: list[int] = []
+
+    class CountingJudge:
+        async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
+            seen.append(len(request.cards))
+            return [
+                JudgeObservation(check="cr-fabricated-fact", quote=c.thesis, why="逐批各报一条")
+                for c in request.cards[:1]
+            ]
+
+    cards = [FABRICATED_CARD.model_copy(update={"thesis": f"第 {i} 张"}) for i in range(14)]
+    observations, run = await observe(CountingJudge(), make_request(cards), batch_size=6)
+
+    assert seen == [6, 6, 2]  # 顺序切分，不打乱、不丢尾批
+    assert len(observations) == 3
+    assert run is not None
+    assert (run.cards_reviewed, run.batch_size, run.batches, run.batches_failed) == (14, 6, 3, 0)
+    assert [(c.check, c.status, c.version, c.hits) for c in run.checks] == [
+        ("cr-fabricated-fact", "observing", 1, 3)
+    ]
+
+
+async def test_observe_keeps_other_batches_when_one_fails() -> None:
+    """一批问不成不连累其余批次：异常吞在批这一级，丢了几批记进台账。"""
+
+    class FlakyJudge:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def review(self, request: JudgeRequest) -> list[JudgeObservation]:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("网关 502")
+            return [
+                JudgeObservation(
+                    check="cr-fabricated-fact", quote=request.cards[0].thesis, why="第二批"
+                )
+            ]
+
+    cards = [FABRICATED_CARD.model_copy(update={"thesis": f"第 {i} 张"}) for i in range(8)]
+    observations, run = await observe(FlakyJudge(), make_request(cards), batch_size=6)
+
+    assert len(observations) == 1
+    assert run is not None
+    assert (run.batches, run.batches_failed) == (2, 1)
 
 
 @pytest.mark.parametrize("field", ["fixed", "suggestion"])

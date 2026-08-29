@@ -15,7 +15,11 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
 from typing import Any
 
 from temporalio import activity
@@ -42,9 +46,11 @@ from reportgen_worker.models import (
     BookCheckRequest,
     BookCheckResult,
     JudgeObservation,
+    JudgeRun,
     Page,
     PageAssembleRequest,
     PageAssembleResult,
+    ReleaseRef,
     UnitComposeRequest,
     UnitComposeResult,
     Violation,
@@ -52,6 +58,46 @@ from reportgen_worker.models import (
 from reportgen_worker.writer import CardWriter, LlmCardWriter, WriterOutputError, WriterRequest
 
 ActivityResult = dict[str, Any]
+
+logger = logging.getLogger(__name__)
+
+JUDGE_LEDGER_ENV = "REPORTGEN_JUDGE_LEDGER"
+"""判官观察台账的落地路径（环境变量，未设＝不落地）。
+
+**为什么是一个文件而不是一张表**：观察数据的用途只有一个——规则 4.17 门禁二"跑 N 份看触发率"，
+它是**追加、只读、聚合时全量扫**的时序记录，没有查询模式、没有并发写者、没有关联查询。
+按红线"配置只放数据、不建通用平台"，此处不建库、不起服务、不发明 schema：一行一次送审的 JSON。
+
+**长期载体不是它**：两条线接通后，`judge_run` 随 activity 结果回到编排侧，由持有状态的那一侧落库
+（成文线不回查任何库，也不该持有跨份状态）。本台账是**冷启动期**唯一能查到触发率的地方——
+在它存在之前，判官跑过什么只活在日志里，而裁决⑨ 要的是数据。
+
+一行 = 一次送审。activity 重试会追加新行，那**不是重复记账**：重试是新的一次 LLM 送审，
+它本来就该被记成新的一份。
+"""
+
+
+def append_judge_ledger(domain: str, run: JudgeRun | None, releases: list[ReleaseRef]) -> None:
+    """把一次送审的台账追加进观察记录（未配置路径即跳过）。
+
+    落 activity 层是分层要求：IO 全部收口在这里（判官层保持纯函数 + 一次网关调用）。
+    **写失败只记一条日志**：台账写不进去是观察数据的损失，不是这份内容的事故——同"判官不阻塞"
+    的同一条理由，把可用性问题变成质量问题是反的。
+    """
+    path = os.environ.get(JUDGE_LEDGER_ENV)
+    if not path or run is None:
+        return
+    record = {
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+        "domain": domain,
+        "releases": [r.release_tag for r in releases],
+        **run.model_dump(),
+    }
+    try:
+        with open(path, "a", encoding="utf-8") as ledger:
+            ledger.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError:
+        logger.warning("判官台账写入失败（不影响 verdict）：%s", path, exc_info=True)
 
 
 def default_writer_factory() -> CardWriter:
@@ -76,6 +122,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     """
     domain, package = request.domain, request.package
     observations: list[JudgeObservation] = []
+    judge_run: JudgeRun | None = None
 
     def failed(violations: list[Violation], rewrites: int = 0) -> ActivityResult:
         return UnitComposeResult(
@@ -83,6 +130,8 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             domain=domain,
             violations=violations,
             observations=observations,
+            # 判官跑过就记，哪怕这一稿后来被打回：观察态的"份"是**送审一次**，不是"发出去一份"
+            judge_run=judge_run,
             rewrites_used=rewrites,
             releases=package.releases,
         ).model_dump()
@@ -150,7 +199,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             # 出口过检·判官层（图 v0.2 §3 第二道）：规则层放行后才问判官。
             # 观察态（规则 4.17 门禁二）= blocking 为空 → 判出什么都只记录，verdict 不受影响；
             # 某条判据经观察期转正为 active 后，同一份观察即成为重写反馈——**开关在数据不在这里**。
-            observations = await observe(
+            observations, judge_run = await observe(
                 judge,
                 JudgeRequest(
                     domain=domain,
@@ -160,6 +209,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     anchors=anchors,
                 ),
             )
+            append_judge_ledger(domain, judge_run, package.releases)
             blocked = [o for o in observations if o.check in blocking]
             if not blocked:
                 return UnitComposeResult(
@@ -167,6 +217,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     domain=domain,
                     cards=cards,
                     observations=observations,
+                    judge_run=judge_run,
                     rewrites_used=attempt,
                     releases=package.releases,
                     # 锁定文案只透传不生产：本域要挂哪几条由求值线随包给定（规则 2.4 零生成），

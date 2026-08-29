@@ -16,6 +16,10 @@
   不是这份内容的事故——把能发的内容因为第二道没跑成而毙掉，等于让可用性问题伪装成质量问题。
 - **判官不得报一句没人写过的话**：观察的 ``quote`` 必须在被检卡片正文里找得到、``check`` 必须是
   本次真下发过的判据，否则丢弃——判官编造原句与它正在判的缺陷是同一种病。
+- **分批送审 + 计数留痕**（2026-08-29 新增）：一次送审只给 :data:`JUDGE_BATCH_SIZE` 张卡，
+  每批各问一次、逐批吞异常；每次送审产出一份 :class:`~reportgen_worker.models.JudgeRun` 台账
+  （判据 × 份 × 批大小 × 触发）。理由见两处 docstring：灵敏度随卡片数塌陷是实测事实，
+  而"0 命中"与"很干净"在没有台账时是同一个数。
 """
 
 from __future__ import annotations
@@ -33,7 +37,9 @@ from reportgen_worker.models import (
     Card,
     CheckAsset,
     EvaluationProfile,
+    JudgeCheckCount,
     JudgeObservation,
+    JudgeRun,
     ReportAnchor,
     ReportDataPackage,
 )
@@ -46,6 +52,21 @@ _QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
 OBSERVING = "observing"
 ACTIVE = "active"
 RETIRED = "retired"
+
+JUDGE_BATCH_SIZE = 6
+"""判官每批送审的卡片数。
+
+**临时值，唯一有实测支撑的那个数**（真跑 2026-08-29）：同一份文稿、同模型、同判据、
+``temperature=0``，整单元 22 张一次送审 → 观察 0 条；取同一份的**前 6 张**再问一次 → 6 条命中，
+且判官没有报错、没有解析失败，就是返回了空数组。即：**灵敏度随一次送审的卡片数塌陷**。
+
+为什么先分批再对照跑（裁决 2026-08-29）：现状等于没查，任何合理批量都严格优于 22 张 0 命中；
+对照跑（6/11/22 各一次）是分批之后的**第一次校准**，不是前置条件。N 与阈值等有数据再定
+（同"卡片数上限 6~8"被撤回的理由：阈值不能拍脑袋）。校准要用的数据由 :class:`JudgeRun` 台账攒。
+
+**不是 prompt 问题**：判官 prompt 里"宁可漏报也不要凑数"那句一并留着不动——前 6 张带着同一句
+指令判出了 6 条，删句证据不足。分批是这一轮唯一的变量。
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -186,17 +207,57 @@ class LlmJudge:
         return parse_observations(content, request)
 
 
-async def observe(judge: Judge, request: JudgeRequest) -> list[JudgeObservation]:
-    """跑判官并**吞掉一切异常**：判官不可用不能把能发的内容毙掉。
+def card_batches(cards: list[Card], size: int = JUDGE_BATCH_SIZE) -> list[list[Card]]:
+    """按送审批量切卡片（顺序切分，不打乱）：保持原顺序是为了让同一份文稿的分批结果可复现。"""
+    return [cards[i : i + size] for i in range(0, len(cards), size)]
 
-    第二道过检是加分项不是准入条件——网关超时、判官模型下线、输出解析不了，结果都只是"这一份没有
-    观察数据"，不是"这一份不能发"。反过来做会让可用性问题伪装成质量问题，而观察态本身就还没有
-    拦截权（规则 4.17 门禁二），此时因判官挂掉而 failed 更是无从谈起。
+
+async def observe(
+    judge: Judge, request: JudgeRequest, batch_size: int = JUDGE_BATCH_SIZE
+) -> tuple[list[JudgeObservation], JudgeRun | None]:
+    """**分批**跑判官并**逐批吞掉异常**，返回观察清单 + 计数台账。
+
+    两条纪律各管一半：
+
+    - **判官不阻塞**（既有）：第二道过检是加分项不是准入条件——网关超时、判官模型下线、输出解析
+      不了，结果都只是"这一份少了些观察数据"，不是"这一份不能发"。反过来做会让可用性问题伪装成
+      质量问题，而观察态本身还没有拦截权（规则 4.17 门禁二）。**异常吞在批这一级**：一批问不成
+      不该连累其余批次，但丢了几批要记进台账（``batches_failed``）。
+    - **计数载体**（新增，裁决 2026-08-29）：台账是规则 4.17 门禁二唯一的数据来源。
+      **0 命中与"很干净"在数据上不可区分**——真跑已经证明这不是假想（22 张 0 命中那次），
+      台账把"问了几批、多大一批、每条判据中了几次"记下来，那次静默 0 才不会被当成合格样本。
+
+    批次**顺序执行**不并发：判官调用是观察不是产能瓶颈，并发只会让网关限流成为新的批失败来源。
     """
-    if not request.checks:
-        return []
-    try:
-        return await judge.review(request)
-    except Exception:
-        logger.warning("判官不可用，本单元无观察数据（不影响 verdict）", exc_info=True)
-        return []
+    if not request.checks or not request.cards:
+        return [], None
+    batches = card_batches(request.cards, batch_size)
+    observations: list[JudgeObservation] = []
+    failed = 0
+    for index, batch in enumerate(batches):
+        try:
+            observations += await judge.review(request.model_copy(update={"cards": batch}))
+        except Exception:
+            failed += 1
+            logger.warning(
+                "判官第 %d/%d 批不可用，该批无观察数据（不影响 verdict）",
+                index + 1,
+                len(batches),
+                exc_info=True,
+            )
+    run = JudgeRun(
+        cards_reviewed=len(request.cards),
+        batch_size=batch_size,
+        batches=len(batches),
+        batches_failed=failed,
+        checks=[
+            JudgeCheckCount(
+                check=check.asset_id,
+                version=check.version,
+                status=check.status,
+                hits=sum(1 for o in observations if o.check == check.asset_id),
+            )
+            for check in request.checks
+        ],
+    )
+    return observations, run

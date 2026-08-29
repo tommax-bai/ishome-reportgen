@@ -281,6 +281,42 @@ class UnitComposeRequest(BaseModel):
     max_rewrites: int = 2
 
 
+class JudgeCheckCount(BaseModel):
+    """一条判据在一次送审里的触发次数（规则 4.17 门禁二的最小计数单元）。
+
+    带 ``version`` 与 ``status``：触发率必须归到**判据的哪一版**上——判据改了 requirement 就是
+    另一条判据了，把两版的触发混在一个数里，观察期数据读出来的是平均值，而门禁二问的是
+    "这一版工不工作"。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    check: str
+    version: int
+    status: str
+    hits: int
+
+
+class JudgeRun(BaseModel):
+    """判官一次送审的台账（裁决 2026-08-29「先建计数载体，N 与阈值有数据再定」）。
+
+    维度取够四个就停（存储最小化，不建通用平台）：**判据 × 份 × 批大小 × 触发**。
+    ``batch_size``/``batches`` 是必需维度不是调试信息——真跑实测同一份文稿 22 张一次送审 0 命中、
+    前 6 张送审 6 命中，**不记批量就无法回溯解释触发率的变化**，历史数据会变成一堆不可比的数。
+
+    ``batches_failed`` 记的是"这一份里有几批没问成"：判官不阻塞（批失败只丢该批观察），
+    但**丢了多少必须记**——不然一份只成功问了一批的稿子，和一份干干净净的稿子，在统计里长得一样。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    cards_reviewed: int
+    batch_size: int
+    batches: int
+    batches_failed: int = 0
+    checks: list[JudgeCheckCount] = []
+
+
 class UnitComposeResult(BaseModel):
     """单元成文结果：重写用尽仍不过 → verdict=failed 上抛，绝不静默假成功（图 v0.2 §3）。
 
@@ -295,6 +331,12 @@ class UnitComposeResult(BaseModel):
     cards: list[Card] = []
     violations: list[Violation] = []
     observations: list[JudgeObservation] = []
+    judge_run: JudgeRun | None = None
+    """本次送审的计数台账（``None`` = 判官没跑：本域无判官判据，或规则层就没放行）。
+
+    与 ``observations`` 的分工：那个是**判出了什么**（内容，给重写循环与样本采集用），
+    这个是**问了几次、问了多少张、每条判据中了几次**（计数，给规则 4.17 门禁二用）。
+    观察数为 0 有两种截然不同的成因——"很干净"与"根本没问成"，只有台账区分得开。"""
     rewrites_used: int = 0
     releases: list[ReleaseRef] = []
     required_provenance: list[ProvenanceNote] = []

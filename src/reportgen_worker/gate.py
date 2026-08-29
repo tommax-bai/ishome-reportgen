@@ -4,7 +4,8 @@
 三类判据分离：
 
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
-  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名、语域示范不得被逐字抄进正文。
+  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名、语域示范不得被逐字抄进正文、
+  **正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
 - **语域与标注门禁（gate-thesis-\\* / gate-assertion-\\* / gate-provenance-\\*）**：规则
   4.10a/4.10c/5.8 的消费侧强制。判定由求值线做完（anchors[].presentation 与
@@ -227,6 +228,24 @@ def run_unit_gate(cards: list[Card], domain: str, package: ReportDataPackage) ->
         if not card.thesis.strip() or not card.body.strip():
             violations.append(
                 Violation(check="gate-required-field", detail=f"{label} thesis/body 空")
+            )
+        # 正文逐字等于主旨句 = 这张卡没有承载任何推导，等于把落点表换了个排版（违规则 1.6
+        # "不以无内容的密度充数"，图 v0.2 §3 卡片是叙事推导的产物而非落点表的另一种形态）。
+        # 真跑立案：2026-08-29 ergonomics 单元 verdict=ok，22 张卡 22/22 逐字相同。
+        #
+        # **这是临时护栏，不是处置**：治本是补上叙事推导那一步（先定讲哪几件事，卡片按事组织），
+        # 只加这条机检，模型补一句填充话就绕过去了——把看得见的退化变成看不见的填充。留它的理由
+        # 只有一条：**"正文逐字等于主旨句"没有正当用例**，逐字比对零误判，代价是零。
+        # 判据形态严格限于**逐字相同**：不做相似度、不设阈值（阈值无数据依据，同卡片数上限那条）。
+        elif card.thesis.strip() == card.body.strip():
+            violations.append(
+                Violation(
+                    check="gate-thesis-body-duplicate",
+                    detail=(
+                        f"{label} 正文与主旨句逐字相同——主旨句说结论，正文要说"
+                        "为什么是这个数、它管的是哪一刻；重复一遍等于这张卡什么都没讲"
+                    ),
+                )
             )
 
         placeholders = set(PLACEHOLDER_RE.findall(text))

@@ -133,11 +133,11 @@ def test_sample_filter_uses_the_same_predicates_as_the_gate() -> None:
     banned = collect_banned_terms(DOMAIN, PACKAGE)
     for _, good in judgment_pairs(persona, banned):
         card = Card(thesis=good, body=good)
-        # 照抄判据除外：示范当然逐字等于它自己，那条判的是卡片抄没抄，不是示范合不合规
+        # 两条判据除外，它们判的都是**卡片**不是示范句：照抄（示范当然逐字等于它自己）、
+        # 正文与主旨句重复（同一句同时当 thesis 与 body 是这里的测试构造，不是被测对象）
+        structural = {"gate-sample-verbatim-copy", "gate-thesis-body-duplicate"}
         assert [
-            v
-            for v in run_unit_gate([card], DOMAIN, PACKAGE)
-            if v.check != "gate-sample-verbatim-copy"
+            v for v in run_unit_gate([card], DOMAIN, PACKAGE) if v.check not in structural
         ] == []
 
 

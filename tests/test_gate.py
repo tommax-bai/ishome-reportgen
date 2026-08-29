@@ -33,6 +33,26 @@ def test_clean_card_passes() -> None:
     assert run_unit_gate([card], "ergonomics", PACKAGE) == []
 
 
+def test_thesis_body_duplicate_rejected() -> None:
+    """正文逐字等于主旨句 = 这张卡没承载任何推导（真跑立案：ergonomics 22/22 逐字相同）。
+
+    临时护栏：模型补一句填充话就能绕过，治本在叙事推导那一步；留它的理由是"逐字相同"零误判。
+    """
+    line = "床面高度在 {lkp-counter-height} 之间，这样你上下床时身体弯折幅度会更小。"
+    card = Card(thesis=line, body=line, number_refs=["lkp-counter-height"])
+    assert "gate-thesis-body-duplicate" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
+
+
+def test_thesis_body_duplicate_only_when_verbatim() -> None:
+    """只判逐字相同：不做相似度、不设阈值（阈值无数据依据，同"卡片数上限 6~8"被撤回的理由）。"""
+    card = Card(
+        thesis="台面高按主厨的身体定。",
+        body="台面高按主厨的身体定：{lkp-counter-height} 这个区间，切菜时手腕不会架起来。",
+        number_refs=["lkp-counter-height"],
+    )
+    assert run_unit_gate([card], "ergonomics", PACKAGE) == []
+
+
 def test_bare_digit_rejected() -> None:
     card = Card(thesis="台面高做九百。", body="就是 900mm。", number_refs=[])
     assert "gate-digit-outside-ref" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))

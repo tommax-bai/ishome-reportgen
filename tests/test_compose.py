@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
@@ -305,6 +306,47 @@ async def test_judge_failure_does_not_block_composition() -> None:
     assert result.verdict == "ok"
     assert result.cards == [GOOD_CARD]
     assert result.observations == []
+
+
+async def test_judge_run_ledger_records_counts(tmp_path, monkeypatch) -> None:
+    """计数载体（裁决 2026-08-29）：一次送审记一行——判据 × 份 × 批大小 × 触发。
+
+    台账是规则 4.17 门禁二唯一的数据来源；没有它，"0 命中"与"根本没问成"在统计里长得一样。
+    """
+    ledger = tmp_path / "judge-ledger.jsonl"
+    monkeypatch.setenv(activities.JUDGE_LEDGER_ENV, str(ledger))
+
+    result = await compose(ScriptedWriter([[GOOD_CARD]]), judge=ScriptedJudge([FABRICATION]))
+
+    assert result.judge_run is not None
+    assert result.judge_run.cards_reviewed == 1
+    assert result.judge_run.batches == 1
+    assert [(c.check, c.hits) for c in result.judge_run.checks] == [("cr-fabricated-fact", 1)]
+
+    line = json.loads(ledger.read_text(encoding="utf-8").strip())
+    assert line["domain"] == "ergonomics"
+    assert line["releases"] == ["ergonomics@v1", "lighting@v2"]  # 触发率要能归到判据的哪一版
+    assert line["checks"] == [
+        {"check": "cr-fabricated-fact", "version": 1, "status": "observing", "hits": 1}
+    ]
+
+
+async def test_judge_run_absent_when_judge_never_ran() -> None:
+    """规则层没放行 → 判官没跑 → 台账为 None：没送审就不该在分母里占一份。"""
+    result = await compose(ScriptedWriter([[BAD_CARD]]))
+
+    assert result.verdict == "failed"
+    assert result.judge_run is None
+
+
+async def test_ledger_write_failure_does_not_block_composition(monkeypatch) -> None:
+    """台账写不进去只是观察数据的损失，不是这份内容的事故（同"判官不阻塞"的同一条理由）。"""
+    monkeypatch.setenv(activities.JUDGE_LEDGER_ENV, "/nonexistent-dir/judge.jsonl")
+
+    result = await compose(ScriptedWriter([[GOOD_CARD]]), judge=ScriptedJudge([FABRICATION]))
+
+    assert result.verdict == "ok"
+    assert result.judge_run is not None
 
 
 async def test_promoted_check_intercepts_and_feeds_rewrite() -> None:
