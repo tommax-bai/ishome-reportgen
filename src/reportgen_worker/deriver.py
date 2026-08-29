@@ -31,6 +31,13 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from reportgen_worker.models import AnchorBrief, EvaluationProfile, GapRecord, NarrativeClaim
 
 DERIVE_LOGICAL_MODEL = "report-unit-derive.default"
+
+# 落点间相互约束的措辞词面（用户裁决 2026-08-29 晚：落点间因果/耦合不得编造，规范 v2.5 §14.10）。
+# 全部逐字来自真跑主张（5/5 命中那轮 + 词面进 prompt 被照抄那轮），不收想象词面。
+# **词面不进 prompt**：把禁句写进指令，模型会照抄禁句本身——「得一起定」作为反例写进 prompt 的
+# 那一轮，4/5 主张逐字带它（与示范句可抄性同病：模型不区分句子挂的是对钩还是叉）。
+# prompt 只说抽象规则，词面在此确定性校验，命中即打回、理由走反馈循环。
+COUPLING_PHRASES = ("得一起定", "一起定", "配着调", "互相让", "协调着看", "其实是一回事")
 _CLAIMS_ADAPTER: TypeAdapter[list[NarrativeClaim]] = TypeAdapter(list[NarrativeClaim])
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
 
@@ -81,10 +88,10 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "你这一步连值都没拿到；\n"
         "3. **先把落点按「其实是同一件事」归组，再给每组写一条主张**——"
         "一个落点一条主张等于把落点表换了个排版，那正是要修的东西。"
-        "归组的依据是**同属一件事**（同一件家具、同一个动作、同一个空间），"
-        "**不是它们之间有因果**：不许写「A 和 B 得一起定/互相让/配着调」这种相互约束——"
-        "两个各管各的尺寸只是恰好都关于床，它们并不互相牵制，数据里没有的联动就是没有；"
-        "并列着说、各给各的理由就好。"
+        "归组的依据是**同属一件事**（同一件家具、同一个动作、同一个空间）——"
+        "床面高和床侧净距同属「床」，**就该进同一条主张**，正文里各给各的理由；"
+        "但**不许把同组落点写成相互约束的关系**（说 A 的取值牵制 B、两者要配合着调整之类）——"
+        "数据里没有这种联动就不许说。归组照做，关系别编——这是两件事；"
         "每条主张挂上它这一组的落点 id（可以挂多条；说取舍不说数的主张也可以一条不挂）；\n"
         "3b. 落点是这一域**已经算出来的**东西，能归进某件事的就别丢在外面——"
         "宁可一条主张多带几个落点，也不要只挑几条讲、剩下的大半不提；\n"
@@ -94,7 +101,9 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         + unbacked
         + "。没背书的题目若要讲，只许作为**坦白主张**（用户裁决：坦白缺口）：用大白话直说"
         "「这件事这轮给不出可靠的数，取决于什么、等什么才算得出来」——"
-        "不许绕着它作描述性分析，不许发明因果去填（「A 挤压 B」「随 X 耦合」这类都是编的）；\n"
+        "不许绕着它作描述性分析，不许发明因果去填（「A 挤压 B」「随 X 耦合」这类都是编的）。"
+        "**坦白只许用于这些题目和「求不出的落点」清单**：清单之外的落点都有算好的值，"
+        "把有值的落点说成「给不出数」是被禁止的隐藏——值多软都要照讲，软的自会带标注；\n"
         "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
         "不要为了铺满而拆出没有取舍的主张；\n"
         f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）：{banned}。"
@@ -103,9 +112,16 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         '输出：JSON 数组，每个元素 {"claim": 主张, "anchors": [用到的落点 id]}，'
         "不要输出数组以外的任何内容。"
     )
-    anchor_lines = [
-        f"- {a.lkp_id}（{a.name}{'，' + a.unit if a.unit else ''}）" for a in request.anchors
-    ]
+
+    # 名字撞禁词的落点**逐行点名**（数据驱动：banned ∩ name，算出来的不是编的）。全局那句
+    # "名字里可能带着这些词"实测不够——ergonomics 的推导在「净宽」上带着反馈连吃三稿
+    # （temperature=0 下，落点清单每行都写着"主通道净宽"，全局提醒压不过逐行复现）。
+    def anchor_line(a: AnchorBrief) -> str:
+        hits = "、".join(f"「{t}」" for t in request.banned_terms if t in a.name)
+        note = f"（名字里的 {hits} 是内部词，勿写进主张）" if hits else ""
+        return f"- {a.lkp_id}（{a.name}{'，' + a.unit if a.unit else ''}）{note}"
+
+    anchor_lines = [anchor_line(a) for a in request.anchors]
     user_parts = [
         f"领域：{request.domain}",
         "这家人的情况（匿名）：" + json.dumps(request.profile.layout_features, ensure_ascii=False),
@@ -153,6 +169,12 @@ def parse_claims(
     ]
     if not cleaned:
         raise DeriverOutputError("推导没有产出任何主张")
+    coupling = sorted({w for w in COUPLING_PHRASES for c in cleaned if w in c.claim})
+    if coupling:
+        raise DeriverOutputError(
+            f"主张里写了落点间的相互约束措辞 {coupling}——两条尺寸同属一件事不等于互相牵制，"
+            "并列着说、各给各的理由，别说它们要配合着定"
+        )
     hits = sorted({t for t in banned_terms for c in cleaned if t in c.claim})
     if hits:
         # 主张是内部语域，禁词表是客户语域的——**这里仍然用同一份表**，因为主张逐字进写作 prompt：

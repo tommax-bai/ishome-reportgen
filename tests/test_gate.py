@@ -69,6 +69,16 @@ def test_unresolved_and_undeclared_ref_rejected() -> None:
     assert "gate-number-ref-undeclared" in violations
 
 
+def test_declared_but_unused_ref_rejected() -> None:
+    """refs 声明了没用＝违约的另一半（真跑立案：假坦白卡声明五个有值落点、正文零占位符）。"""
+    card = Card(
+        thesis="这几项目前给不出可靠数值。",
+        body="这些都还没确定，只能留待现场确认。",
+        number_refs=["lkp-counter-height"],
+    )
+    assert "gate-number-ref-unused" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
+
+
 def test_cross_domain_ref_rejected() -> None:
     """单元只见本域落点（图 v0.2 §2）：ergonomics 单元引用 lighting 落点即违规。"""
     card = Card(

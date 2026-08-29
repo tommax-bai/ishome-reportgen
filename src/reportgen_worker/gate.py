@@ -299,6 +299,22 @@ def run_unit_gate(
                     detail=f"{label} 占位符未在 number_refs 声明：{sorted(undeclared)}",
                 )
             )
+        # 对称的另一半（2026-08-29 晚补，真跑立案）：number_refs 是**占位符全集声明**（契约原文），
+        # 声明了却没用同样违约。立案形态＝假坦白——卡片把五个有值落点声明进 refs、正文写
+        # "这五项目前给不出可靠数值"、零占位符：值被藏起来了，而 v2.4 禁止隐藏。原先只查
+        # "用了没声明"，这一半漏着，假坦白就从缝里过了检。
+        unused = set(card.number_refs) - placeholders
+        if unused:
+            violations.append(
+                Violation(
+                    check="gate-number-ref-unused",
+                    detail=(
+                        f"{label} number_refs 声明了却未在正文引用：{sorted(unused)}"
+                        "——refs 是占位符全集声明；这些落点有值，要么引用它，要么别声明"
+                        "（有值的落点不许说「给不出」，那是被禁止的隐藏）"
+                    ),
+                )
+            )
 
         # v2.4 拆除：原 gate-thesis-degraded-anchor（主旨句支点必须是 THESIS_SUPPORT）。
         # 规则 4.10c 明文把它作废——未过门落点已可进主旨句，条件是随页标注。判断句的纪律

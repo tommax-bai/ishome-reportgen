@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 
 import pytest
@@ -67,6 +68,17 @@ def test_derive_prompt_carries_banned_terms() -> None:
     assert "综合考量" in system  # 公共禁词与域内禁词都要给
 
 
+def test_anchor_lines_flag_banned_terms_inline() -> None:
+    """名字撞禁词的落点逐行点名（数据驱动）：全局提醒实测压不过逐行复现（「净宽」连吃三稿）。"""
+    tainted = copy.deepcopy(request_for())
+    tainted.banned_terms.append("净宽")
+    tainted.anchors.append(AnchorBrief(lkp_id="lkp-passage-main", name="主通道净宽", unit="mm"))
+    user = build_derive_messages(tainted)[1]["content"]
+    assert "lkp-passage-main（主通道净宽，mm）（名字里的 「净宽」 是内部词，勿写进主张）" in user
+    # 没撞词的行不加尾巴
+    assert "lkp-counter-height（橱柜台面高，mm）\n" in user + "\n"
+
+
 def test_derive_prompt_bans_invented_coupling() -> None:
     """归组依据＝同属一件事，落点间因果/耦合不得编造（用户裁决 2026-08-29 晚，规范 v2.5 §14.10）。
 
@@ -74,9 +86,27 @@ def test_derive_prompt_bans_invented_coupling() -> None:
     "每条主张要有取舍或因果"自己逼出来的。关系与数字同族，都不由 LLM 决定。
     """
     system = build_derive_messages(request_for())[0]["content"]
-    assert "不是它们之间有因果" in system
-    assert "得一起定" in system  # 反例词面写明，不留猜
+    assert "不许把同组落点写成相互约束的关系" in system
+    assert "就该进同一条主张" in system  # 禁耦合不禁归组——上一版措辞把归组也劝退了（22 主张那轮）
+    # 词面不进 prompt：「得一起定」作为反例写进指令的那轮，4/5 主张逐字照抄了禁句本身
+    assert "得一起定" not in system
     assert "取舍或因果" not in system  # 逼出耦合的旧指令退场
+
+
+def test_parse_rejects_coupling_phrases_deterministically() -> None:
+    """耦合词面走确定性校验不走 prompt（照抄病）：命中即打回，理由进反馈循环。"""
+    raw = json.dumps(
+        [{"claim": "床面高度和床侧净距得一起定，这样上下床都顺", "anchors": []}],
+        ensure_ascii=False,
+    )
+    with pytest.raises(DeriverOutputError, match="相互约束措辞"):
+        parse_claims(raw, set())
+    # 并列形态照收
+    ok = json.dumps(
+        [{"claim": "床太高起身费力，床边太窄下床碰腿——都按你的身体来定", "anchors": []}],
+        ensure_ascii=False,
+    )
+    assert len(parse_claims(ok, set())) == 1
 
 
 def test_unbacked_topic_must_be_confessed_in_derivation() -> None:
