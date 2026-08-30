@@ -28,7 +28,7 @@ def checks_of(violations: list) -> set[str]:  # type: ignore[type-arg]
 
 
 def package_with_anchor(
-    value_kind: str, value: Any, lkp_id: str = "lkp-probe"
+    value_kind: str, value: Any, lkp_id: str = "lkp-probe", unit: str = "mm"
 ) -> ReportDataPackage:
     """在 ergonomics 域塞一条指定 valueKind 的落点——七类值构成各自的引用合法性都要能单测到。
 
@@ -40,7 +40,7 @@ def package_with_anchor(
             "lkpId": lkp_id,
             "name": "测试落点",
             "numberClass": "analysis",
-            "unit": "mm",
+            "unit": unit,
             "valueKind": value_kind,
             "value": value,
             "basisTag": "ergonomics@v1",
@@ -157,6 +157,106 @@ def test_release_pattern_runs_on_raw_text_with_placeholders() -> None:
     assert "cr-bound-word-before-placeholder" in checks_of(
         run_unit_gate([card], "ergonomics", package)
     )
+
+
+def test_number_pushbacks_offer_a_route_the_model_can_take() -> None:
+    """两条写数判据的打回话必须给**第二条出路**（坑单第 19 条：照做不得到就不是打回）。
+
+    立案样本：`gate-chinese-numeral` 对「半小时」要求"换 {lkp-*} 占位"，而本域根本没有能背书
+    它的落点——2026-08-30 灯光章真跑里，两轮重写整个烧在这一条上，它是那一跑唯一的违规。
+    禁的是没有背书的数，不是禁止说这件事：说不带数的说法照样成立，这条路要写在打回话里。
+    """
+    card = Card(thesis="灯要跟着人走。", body="进门半小时内灯不该刺眼。", number_refs=[])
+    violations = run_unit_gate([card], "ergonomics", PACKAGE)
+    numeral = [v for v in violations if v.check == "gate-chinese-numeral"]
+    assert numeral and "改成不带数的说法" in numeral[0].detail
+
+
+# ---------------------------------------------------------------------------
+# 记号旁边的措辞（gate-bound-word-before-ref / gate-unit-after-ref）
+# ---------------------------------------------------------------------------
+
+
+def test_wording_around_ref_is_the_reader_visible_duplication() -> None:
+    """立案原句：一张卡两处叠字，边界词与单位各一次（2026-08-30 灯光章成品，读者可见）。
+
+    `lkp-cct-variety-max` 是单边界落点（`{max: 3}`，单位「种」），渲染层按值形态出
+    「不超过 3 种」，写作侧又自己写了边界词与单位，成品逐字：
+
+        主旨：全屋灯光颜色种类不能多于 不超过 3 种 种。
+        正文：这个上限 不超过 3 种 是按你实际动线长度和停留节奏定的…
+
+    两条判据都要中，且边界词那条要中**两处**——主旨句的「不能多于」与正文的「上限」是
+    两个错，只报一条的话模型改完第一处第二处还在，而重写只有两轮。
+    """
+    package = package_with_anchor("range", {"max": 3}, "lkp-cct-variety-max", unit="种")
+    card = Card(
+        thesis="全屋灯光颜色种类不能多于 {lkp-cct-variety-max} 种。",
+        body="这个上限 {lkp-cct-variety-max} 是按你实际动线长度和停留节奏定的。",
+        number_refs=["lkp-cct-variety-max"],
+    )
+    violations = run_unit_gate([card], "ergonomics", package)
+    assert "gate-unit-after-ref" in checks_of(violations)
+    bound = [v for v in violations if v.check == "gate-bound-word-before-ref"]
+    assert len(bound) == 2
+    assert "不能多于" in bound[0].detail and "上限" in bound[1].detail
+
+
+def test_bound_words_the_old_word_list_missed() -> None:
+    """旧判据（release 里的固定词表 + 紧邻占位符）漏掉的两类，现在都要中。
+
+    漏的原因不是表不够长：**光看词面判不出这句在不在重复渲染层的输出**。现形态按词根匹配、
+    按小句取范围，「不能多于」（隔着字）与「上限」（不在表上）都落进射程。
+    """
+    package = package_with_anchor("range", {"min": 900}, "lkp-probe")
+    for clause in ("主通道不能多于 ", "这个上限 ", "至少留 ", "走道宽度别超过 "):
+        card = Card(
+            thesis="主通道要走得开。",
+            body=f"{clause}{{lkp-probe}}就够两个人错身。",
+            number_refs=["lkp-probe"],
+        )
+        assert "gate-bound-word-before-ref" in checks_of(
+            run_unit_gate([card], "ergonomics", package)
+        ), clause
+
+
+def test_bound_word_in_another_clause_is_not_a_hit() -> None:
+    """判据按**小句**取范围：逗号之外的边界词是另一句话的事，不算叠字。
+
+    过拦与漏拦同样是失效（同中文数字判据那条的教训）——词表放宽了，范围就必须收在小句内。
+    """
+    package = package_with_anchor("range", {"min": 900}, "lkp-probe")
+    card = Card(
+        thesis="主通道要走得开。",
+        body="预算上限先不谈，主通道留出 {lkp-probe} 的空间就够两个人错身。",
+        number_refs=["lkp-probe"],
+    )
+    assert "gate-bound-word-before-ref" not in checks_of(
+        run_unit_gate([card], "ergonomics", package)
+    )
+
+
+def test_clean_card_around_ref_passes() -> None:
+    """写到记号为止的卡片两条都不中——判据要能让引擎写得成句。"""
+    package = package_with_anchor("range", {"min": 900}, "lkp-probe")
+    card = Card(
+        thesis="主通道要走得开。",
+        body="主通道留出 {lkp-probe} 的空间，两个人错身不用侧肩。",
+        number_refs=["lkp-probe"],
+    )
+    checks = checks_of(run_unit_gate([card], "ergonomics", package))
+    assert "gate-bound-word-before-ref" not in checks
+    assert "gate-unit-after-ref" not in checks
+
+
+def test_unit_after_ref_hits_regardless_of_value_shape() -> None:
+    """单位那一半与值形态无关：分项落点整条引用、单项引用，渲出来都逐项带单位。"""
+    card = Card(
+        thesis="起居室分场合给光。",
+        body="沙发读书那块按 {lkp-illuminance-living.reading} lx 做。",
+        number_refs=["lkp-illuminance-living.reading"],
+    )
+    assert "gate-unit-after-ref" in checks_of(run_unit_gate([card], "lighting", PACKAGE))
 
 
 def test_release_check_pattern_executed() -> None:

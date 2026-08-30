@@ -34,10 +34,12 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from reportgen_worker.gate import (
     BARE_LKP_RE,
+    BOUND_WORD_RE,
     CHINESE_NUMBER_RE,
     DIGIT_RE,
     PLACEHOLDER_RE,
     THESIS_SUPPORT,
+    bound_phrases,
     item_tokens,
 )
 from reportgen_worker.models import (
@@ -158,6 +160,53 @@ def judgment_pairs(
     return pairs
 
 
+def _wording_note(anchor: ReportAnchor) -> str:
+    """这个记号渲出来**自己带了什么**：单位，以及值只给一侧时的边界说法。
+
+    立案是读者看得见的那句叠字（2026-08-30 灯光章成品逐字：`全屋灯光颜色种类不能多于
+    不超过 3 种 种。`）。改法只有正面这一条能用：**禁止词面不进 prompt**（铁律一，三次真跑
+    打脸）——原先这里写的是"占位符前不要写「不少于/不低于/至少/不超过」这类边界词"，
+    模型转头写了「不能多于」和「上限」，两个都不在那张表上。列禁词等于给模型一张躲得开的表，
+    而它需要的是知道**记号已经把这句话说完了**。
+
+    话由数据算出来（单位取自这条落点自己的 ``unit``，边界说法取自值的形态），不是模板：
+    与门禁共用 :func:`reportgen_worker.gate.bound_phrases` 一份判定，
+    prompt 说的和 gate 拦的不会是两回事。
+
+    **两半都逐字给**：抽象说"自带边界说法"时，lighting 六跑里边界那一半复发 5/6，而同一段话里
+    单位是逐字给的（「单位「种」」）、复发 0/6。改成逐字后再六跑：边界 4/6、单位仍 0/6——
+    **两档差别读不出来**（每格 6 跑量不出这个量级，同 persona 示范块 A/B 的既有口径），
+    别拿它当"逐字有效"的证据；留逐字形态的理由是与门禁同口径，不是过检率。
+    真正读得出来的是另一件事：单位十二跑一次没复发，边界九跑中——机制不是模型不守纪律，是
+    **它想写的那句中文里天然带边界词**（"显色指数不低于 90"），处置待裁，见
+    `_iteration/run-2026-08-30-wording-around-ref.md` §四。
+    铁律一（禁止词面不进 prompt）在这里不适用：给的不是"不许写的词"，是**这个记号已经说了的
+    话**——单位那一半正是这么给的，十二跑一次没被抄进正文。
+
+    **第二句是"边界词就藏在落点自己的名字里"**（坑单第 4 条的同一形态，改后首轮真跑逮到）：
+    `lkp-cct-variety-max` 的题名是「全屋色温种类上限」，模型把名字里的「上限」搬进了正文
+    （`全屋能用的灯光颜色种类上限是 {lkp-cct-variety-max}`），两轮重写没改掉。处置沿用既有那条：
+    **撞词的落点在 prompt 里逐行点名**（数据驱动 = 词根表 ∩ 题名），并给出接得上的写法——
+    改说法不改数据，题名里的「上限」是准确的，不能为它改题名。
+    """
+    parts = []
+    carried = []
+    if anchor.unit:
+        carried.append(f"单位「{anchor.unit}」")
+    phrases = bound_phrases(anchor)
+    if phrases:
+        carried.append("边界说法「" + "／".join(phrases) + "…」（这条值只给了一侧）")
+    if carried:
+        parts.append("这个记号渲出来自带" + "、".join(carried) + "，正文写到记号为止，前后不用再补")
+    collision = BOUND_WORD_RE.search(anchor.name)
+    if collision is not None:
+        parts.append(
+            f"这条的题名里带着「{collision.group(0)}」——题名是内部标签，不是要你照抄的说法，"
+            f"那层意思记号自己会说：写「…{{{anchor.lkp_id}}}。」直接接上去就行"
+        )
+    return "\n  " + "；".join(parts) if parts else ""
+
+
 def _anchor_line(anchor: ReportAnchor) -> str:
     """落点的下发行：题名 + 值 + 语域档 + **这条落点可以怎么引用**（规则 1.9，v2.8）。
 
@@ -177,8 +226,10 @@ def _anchor_line(anchor: ReportAnchor) -> str:
     )
     tokens = item_tokens(anchor)
     if tokens:
-        return f"{head}\n  这条分 {len(tokens)} 项，各项的记号：" + "、".join(tokens)
-    return f"{head}\n  这条只有一个值，引用写 {{{anchor.lkp_id}}}"
+        ref = f"\n  这条分 {len(tokens)} 项，各项的记号：" + "、".join(tokens)
+    else:
+        ref = f"\n  这条只有一个值，引用写 {{{anchor.lkp_id}}}"
+    return head + ref + _wording_note(anchor)
 
 
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
@@ -220,9 +271,9 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "只有一个值的落点写 {lkp-id}，值是区间就整条渲染成区间（如「亮 3-5 倍」），"
         "句式用「在…之间」「…到…」；分了项的落点（分场景、分档位、分维度、分项）"
         "已把每一项的记号逐个列出，要说哪一项就写哪一项的记号，一个记号出的就是那一项的值；"
-        "**占位符前不要写「不少于/不低于/至少/不超过」这类边界词**——单边界落点渲染出来自带"
-        "边界语义（渲染成「不低于 X」），你再写一遍就成了「不少于不低于 750 mm」的叠字，"
-        "写「留出 {lkp-x} 的空间」「按 {lkp-x} 做」即可；\n"
+        "**一个记号渲出来是完整的说法**——每条落点下面写着它自带什么（单位、值只给一侧时的"
+        "边界说法），那些正文里不用也不要再写一遍：写「留出 {lkp-x} 的空间」「按 {lkp-x} 做」，"
+        "写到记号为止；\n"
         "3. 落点分两档：标【可作支点】的可以拿来下判断；标【未过门·建议口吻】的照常用，"
         "**主旨句里也可以出现**，但语域限「我们建议…」「按行业通行做法…」，"
         "不许写成「国标要求」「必须」这类标准口吻——它没有外部依据背书；\n"

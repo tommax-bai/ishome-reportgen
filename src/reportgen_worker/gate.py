@@ -5,7 +5,8 @@
 
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
   占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名与裸项名、
-  语域示范不得被逐字抄进正文、**正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）。
+  语域示范不得被逐字抄进正文、**正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）、
+  **记号旁边不替渲染层说话**（前不写边界词、后不补单位——记号渲出来是完整的说法）。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
   **两层模型（规则 1.9，v2.8）**：一条落点＝若干项，正文可写 ``{lkp-x.项名}`` 引其中一项。
   ``single``/``range`` 只有一个匿名项，带项名即违规；其余五类的项名必须真实存在，
@@ -84,6 +85,42 @@ CHINESE_NUMBER_RE = re.compile(
 
 THESIS_SUPPORT = "THESIS_SUPPORT"
 CALIBRATED = "calibrated"
+
+# 打回话只有在"照做得到"时才是打回，否则是把重写轮数烧掉（坑单第 19 条）。两条写数判据原先
+# 只说"换 {lkp-*} 占位"，而立案样本 `gate-chinese-numeral`「半小时」在本域**根本没有对应落点**——
+# 模型照这句话做不到，两轮重写全烧在这一条上（2026-08-30 灯光章真跑，verdict=failed 的唯一违规）。
+# 补的是**第二条出路**：禁的是没有背书的数，不是禁止说这件事，说不带数的说法照样成立。
+_NO_ANCHOR_ROUTE = (
+    "。两条路选一条：上面的落点清单里有能背书这个数的，就写它的记号；"
+    "一条都没有，就把这句话改成不带数的说法——禁的是没有背书的数，不是禁止说这件事"
+)
+
+# 记号旁边的措辞（2026-08-30 立案，**当时唯一读者可见的成品缺陷**）：一个记号渲出来是**完整的
+# 说法**——值 + 单位，值只给一侧时还自带边界措辞（用户裁决 2026-08-29 晚：边界语义在值里、
+# 措辞由渲染层按值形态出）。正文在记号前后再写一遍，成品逐字就是叠字：
+#
+#     全屋灯光颜色种类不能多于 不超过 3 种 种。      ← 边界词与单位各叠一次
+#
+# 判据从 release 数据挪进代码（原 cr-bound-word-before-placeholder 已 retire，语义由这里承接）：
+#   ① **两半是同一条纪律**，判它们要同一份口径——单位那一半根本不可能写成 pattern
+#      （得逐字比对这条落点自己的 unit，那只有数据包知道），两半分居两处即"同一条规则两处各
+#      写一遍"（坑单第 10 条同型），改一处必忘一处。
+#   ② 词表放在 release 数据里没救活它：原 pattern 靠**固定词表 + 紧邻占位符**匹配，立案的两句
+#      **都漏了**——「不能多于」不在表里、「上限」根本不是它认的边界词。词面枚举是这条判据的
+#      形态错误，不是词表不够长。
+# 词表因此收成**词根**（"少于"覆盖"不少于/不能少于"、"超过"覆盖"不超过"），并按**小句**取范围：
+# 隔着几个字的边界词照样是同一句话里的边界词，逗号之外的则是另一句，不算（不设"隔几个字"的
+# 距离阈值——阈值要有数据才定，而立案的两句都紧邻）。
+# **只收直接说量的边界**：形容词性最高级（最大/最高/最低）不收，它们更多是在修饰名词
+# （"全屋最高的那面墙旁边放 {lkp-x}"），收了就是过拦，而过拦与漏拦同样是失效；后置的
+# "以内/以下"同理暂不收。触发条件写死：**这两类在真跑成品里出现一次，就按那条真样本补进词根表**
+# （反例只收真跑样本，不靠想象扩表）。
+BOUND_WORD_RE = re.compile(
+    "少于|多于|大于|小于|低于|高于|超过|至少|最少|至多|最多|起码|上限|下限|封顶"
+)
+_CLAUSE_TAIL_RE = re.compile(r"[^，。；：！？、\n!?,;:]*$")
+"""记号所在的那个小句（自最近一个断句符之后）——判据的取值范围。"""
+_BOUND_KEYS = frozenset({"min", "max"})
 
 # persona 判断句样例（规则 4.13 之②）进 prompt 后的真跑副作用（2026-08-28）：模型把 ✓ 示范句
 # **逐字抄进卡片**当成这家人的结论——示范是"怎么讲"的样本，不是"讲什么"的素材，抄过去就成了
@@ -372,6 +409,90 @@ def _item_name_violations(anchor: ReportAnchor) -> list[Violation]:
     ]
 
 
+# 渲染层对单边界值的**登记措辞**（用户裁决 2026-08-29 晚）。这两个词面是本仓与渲染层之间
+# 仅有的共享字面：写作侧要能逐字告诉模型"你这个记号已经把这句话说完了"，就绕不开它们。
+# 改渲染层的措辞要一并改这里（同"投影规则两处各写一遍"，坑单第 10 条——已知代价，非疏忽）。
+_RENDER_BOUND_PHRASE = {"min": "不低于", "max": "不超过"}
+
+
+def bound_phrases(anchor: ReportAnchor, item_name: str | None = None) -> list[str]:
+    """这个记号渲出来自带哪些边界措辞（**值只给了一侧**时才有），按出现顺序去重。
+
+    整条引用看它的全部项（分维度落点每一项各带一次），单项引用只看那一项。
+    写作侧与门禁侧共用这一份判定：prompt 据它逐字告诉模型记号自带什么
+    （:func:`reportgen_worker.writer._wording_note`），门禁据它说清打回话，两处不会各判各的。
+    """
+    value = anchor.value
+    if item_name is not None:
+        values = [value[item_name]] if isinstance(value, dict) and item_name in value else []
+    elif anchor.has_items:
+        values = list(value.values()) if isinstance(value, dict) else []
+    else:
+        values = [value]
+    phrases: list[str] = []
+    for v in values:
+        if not isinstance(v, dict) or len(v) != 1 or not set(v) <= _BOUND_KEYS:
+            continue
+        phrase = _RENDER_BOUND_PHRASE[next(iter(v))]
+        if phrase not in phrases:
+            phrases.append(phrase)
+    return phrases
+
+
+def renders_bound_phrase(anchor: ReportAnchor, item_name: str | None = None) -> bool:
+    """这个记号渲出来带不带边界措辞。"""
+    return bool(bound_phrases(anchor, item_name))
+
+
+def _adjacent_wording_violations(
+    label: str, text: str, anchors_by_id: dict[str, ReportAnchor]
+) -> list[Violation]:
+    """记号前后的措辞替渲染层把话说了（立案与判据形态见 :data:`BOUND_WORD_RE` 上方）。
+
+    **分两条判据不并一条**：语义不同——一条判记号前的边界词，一条判记号后的单位，
+    判据名字与语义必须一致（同 ``gate-lkp-identifier-leak`` 与 ``gate-item-name-leak`` 的分法）。
+    两条的打回话以同一句收尾，那句才是纪律本身：**记号渲出来是完整的说法，正文写到记号为止**。
+
+    按**出现位置**扫原文，不走 :func:`placeholder_refs` 那套集合：判的就是记号前后那几个字，
+    去重即丢位置。打回话把**那一小句原文逐字带上**——同一个记号在一张卡里可以错两处
+    （立案那张卡就是：主旨句里"不能多于"、正文里"上限"），只报一条的话模型改完第一处
+    第二处还在，而重写只有两轮。逐字相同的两处才合并（那是同一个错的两遍）。
+    """
+    violations: list[Violation] = []
+    seen: set[str] = set()
+
+    def _add(check: str, detail: str) -> None:
+        if detail not in seen:
+            seen.add(detail)
+            violations.append(Violation(check=check, detail=detail))
+
+    for match in PLACEHOLDER_RE.finditer(text):
+        anchor = anchors_by_id.get(match.group(1))
+        if anchor is None:
+            continue  # 落点认不出已由 ref_violation 报过，同一处不报两遍
+        token, unit = match.group(0), anchor.unit
+        clause_match = _CLAUSE_TAIL_RE.search(text[: match.start()])
+        clause = clause_match.group(0) if clause_match else ""
+        bound = BOUND_WORD_RE.search(clause)
+        if bound is not None:
+            _add(
+                "gate-bound-word-before-ref",
+                f"{label} 「{clause}{token}」记号前写了边界词「{bound.group(0)}」——"
+                "边界说法归渲染层：值只给一侧时记号自己会带上它，而点值与两端齐的区间"
+                "压根没有这层语义，写了等于替数据下一个它没给的判断。"
+                f"删掉这个词即可（「按 {token} 做」「留出 {token} 的空间」）："
+                "记号渲出来是完整的说法，正文写到记号为止",
+            )
+        if unit and text[match.end() :].lstrip(" \u3000\t").startswith(unit):
+            _add(
+                "gate-unit-after-ref",
+                f"{label} 「{token} {unit}」记号后又写了一遍单位「{unit}」——"
+                "这条落点的单位由记号自己带出来，删掉记号后面那个单位即可："
+                "记号渲出来是完整的说法，正文写到记号为止",
+            )
+    return violations
+
+
 def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]:
     """写作前的生产方契约守卫：数据包本身违约的，不必烧一次 LLM 调用才发现。
 
@@ -532,6 +653,9 @@ def run_unit_gate(
                 )
             )
 
+        # 记号旁边的措辞（边界词在前、单位在后）：跑**原文**且要位置，故不与下面剥占位的那批同路。
+        violations.extend(_adjacent_wording_violations(label, text, anchors_by_id))
+
         # v2.4 拆除：原 gate-thesis-degraded-anchor（主旨句支点必须是 THESIS_SUPPORT）。
         # 规则 4.10c 明文把它作废——未过门落点已可进主旨句，条件是随页标注。判断句的纪律
         # 由下面的断言预算承接（"以什么底气说"），标注纪律由册级页面比对承接（"标没标"）。
@@ -566,7 +690,8 @@ def run_unit_gate(
             violations.append(
                 Violation(
                     check="gate-digit-outside-ref",
-                    detail=f"{label} 正文出现裸数字（数字只能经 {{lkp-*}} 占位引用落点对象）",
+                    detail=f"{label} 正文出现裸数字（数字只能经 {{lkp-*}} 占位引用落点对象）"
+                    f"{_NO_ANCHOR_ROUTE}",
                 )
             )
         chinese_number = CHINESE_NUMBER_RE.search(stripped)
@@ -575,7 +700,7 @@ def run_unit_gate(
                 Violation(
                     check="gate-chinese-numeral",
                     detail=f"{label} 正文以中文数字写数（「{chinese_number.group(0)}」）"
-                    "——换 {lkp-*} 占位；数字纪律管的是数不是字形",
+                    f"——数字纪律管的是数不是字形{_NO_ANCHOR_ROUTE}",
                 )
             )
         # 客户语域禁内部标识名：{lkp-*} 是渲染契约，裸 lkp- 是把内部命名空间漏给业主看
