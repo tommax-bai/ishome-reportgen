@@ -111,3 +111,37 @@ def test_requires_annotation_falls_back_for_legacy_package() -> None:
 
     assert package.domain_anchors("ergonomics")[0].requires_annotation is True
     assert package.evaluated_on == "2026-08-29"
+
+
+def test_package_accepts_triggered_rules_and_slices_them_by_domain() -> None:
+    """消费侧先建：生产侧还没发这个字段之前，成文线就得认得它（同 provenance 那批的顺序纪律）。"""
+    raw = copy.deepcopy(PACKAGE_JSON)
+    raw["triggeredRulesByDomain"] = {
+        "storage": [
+            {
+                "assetId": "rule-practice-storage-balcony-cleaning",
+                "layer": "tier-practice",
+                "content": "阳台留清洁工具位（含插座）",
+                "rationale": "吸尘器和拖把要有固定的家，还要能充电",
+                "severity": "recommended",
+                "calibration": "draft",
+                "triggeredBy": {
+                    "type": "layout_feature",
+                    "feature": "balcony_service",
+                    "evidence": "阳台内有洗衣机设备位",
+                },
+            }
+        ]
+    }
+
+    package = load_package().__class__.model_validate(raw)
+
+    assert (
+        package.domain_triggered_rules("storage")[0].triggered_by.evidence == "阳台内有洗衣机设备位"
+    )
+    assert package.domain_triggered_rules("lighting") == []  # 无该域条目＝空，不是 KeyError
+
+
+def test_package_without_triggered_rules_still_parses() -> None:
+    """缺省空 = 生产方未升级的旧包，**不是"未触发"**：宽进，不据此拦截。"""
+    assert load_package().triggered_rules_by_domain == {}

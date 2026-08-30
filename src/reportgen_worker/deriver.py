@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from collections.abc import Sequence
@@ -28,7 +27,13 @@ from typing import Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from reportgen_worker.models import AnchorBrief, EvaluationProfile, GapRecord, NarrativeClaim
+from reportgen_worker.models import (
+    AnchorBrief,
+    EvaluationProfile,
+    GapRecord,
+    NarrativeClaim,
+    TriggeredRule,
+)
 
 DERIVE_LOGICAL_MODEL = "report-unit-derive.default"
 
@@ -59,6 +64,12 @@ class DeriveRequest(BaseModel):
     而下一稿拿到的主张还是那句——真跑实测整单元连吃三稿死在同一个词（`净宽`）上。
     prompt 与门禁两处口径不一致，写作器会被反复打回却不知道该怎么改；
     这里是同一条纪律往上游多走一层。"""
+    triggered_rules: list[TriggeredRule] = []
+    """本户**已经触发**的规则条目（求值线判定完随包下发，成文线不重判触发）。
+
+    它回答"这一章该讲到什么"——**这正是推导步的题目**，故落在这一步不落写作步：
+    写作步拿到的是主张，讲什么已经定完了。逐字照抄的风险由 :func:`parse_claims` 的确定性校验
+    兜住（同禁词那条路径；prompt 里叮嘱无效已实测三次）。"""
     backed_predicates: list[str] = []
     unbacked_predicates: list[str] = []
     feedback: list[str] = []
@@ -95,6 +106,10 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "每条主张挂上它这一组的落点 id（可以挂多条；说取舍不说数的主张也可以一条不挂）；\n"
         "3b. 落点是这一域**已经算出来的**东西，能归进某件事的就别丢在外面——"
         "宁可一条主张多带几个落点，也不要只挑几条讲、剩下的大半不提；\n"
+        "3c. 「这套户型触发的条目」是**这一章必须讲到的点**——每条都要落进某条主张里，"
+        "但**用你自己的话讲**：那些条目是内部写法，逐字搬进主张会被机检打回。"
+        "讲的时候带上它**为什么对这户成立**（条目后面括号里那句就是依据）——"
+        "「因为你家阳台带家政位」这种话才是业主要看的，凭空说「阳台要留清洁位」不是；\n"
         "4. 能下结论的题目只有这些："
         + backed
         + "；这些题目这轮**没有背书**，只能描述不能下判断："
@@ -124,10 +139,19 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     anchor_lines = [anchor_line(a) for a in request.anchors]
     user_parts = [
         f"领域：{request.domain}",
-        "这家人的情况（匿名）：" + json.dumps(request.profile.layout_features, ensure_ascii=False),
+        # 户型特征**只下发依据文字不下发标记名**：键是内部标识符（`balcony_service` 这类），
+        # 而主张逐字进写作 prompt，内部词面混进去就会出现在卡片上（客户语域禁内部编号）。
+        # 值本身就是人话依据（"阳台内有洗衣机设备位"），够推导用且不带内部词面。
+        "这套户型（匿名）："
+        + ("；".join(request.profile.layout_features.values()) or "（暂无户型信息）"),
         # 只给题名不给值：这一步不产生数字（图 v0.2 §3），不给值即产不出
         "本域可用的落点（只有题名，值在下一步）：\n" + "\n".join(anchor_lines),
     ]
+    if request.triggered_rules:
+        user_parts.append(
+            "这套户型触发的条目（必须讲到，换成人话讲；括号里是它对这户成立的依据）：\n"
+            + "\n".join(_rule_line(r) for r in request.triggered_rules)
+        )
     if request.feedback:
         user_parts.append(
             "上一稿被打回，逐条改：\n" + "\n".join(f"- {f}" for f in request.feedback)
@@ -143,8 +167,22 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     ]
 
 
+def _rule_line(rule: TriggeredRule) -> str:
+    """触发条目的下发行：内容 + 理由 + 依据。
+
+    ``always`` 触发的条目没有依据（它对谁都成立），**不写括号**——写"因为：无"会诱出
+    "根据通用规范"这类无依据的背书话术。
+    """
+    why = f"；{rule.rationale}" if rule.rationale else ""
+    evidence = f"（因为这户：{rule.triggered_by.evidence}）" if rule.triggered_by.evidence else ""
+    return f"- {rule.content}{why}{evidence}"
+
+
 def parse_claims(
-    raw: str, known_anchor_ids: set[str], banned_terms: Sequence[str] = ()
+    raw: str,
+    known_anchor_ids: set[str],
+    banned_terms: Sequence[str] = (),
+    triggered_rules: Sequence[TriggeredRule] = (),
 ) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
@@ -183,6 +221,20 @@ def parse_claims(
         raise DeriverOutputError(
             f"主张里出现禁词 {hits}——这几个词下一步照抄就会被机检打回，换人话重写"
         )
+    copied = sorted(
+        {
+            phrase
+            for rule in triggered_rules
+            for phrase in (rule.content, rule.rationale)
+            if phrase and any(phrase in c.claim for c in cleaned)
+        }
+    )
+    if copied:
+        # 条目逐字照抄＝把内部写法搬进主张，而主张逐字进写作 prompt（示范句可抄性同病，
+        # 三次真跑证明 prompt 里叮嘱压不住）。判在这一步，写作步才拿得到人话骨架。
+        raise DeriverOutputError(
+            f"主张逐字照抄了触发条目 {copied}——那是内部写法，用业主听得懂的话重讲一遍"
+        )
     return cleaned
 
 
@@ -210,4 +262,9 @@ class LlmNarrativeDeriver:
             )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
-        return parse_claims(content, {a.lkp_id for a in request.anchors}, request.banned_terms)
+        return parse_claims(
+            content,
+            {a.lkp_id for a in request.anchors},
+            request.banned_terms,
+            request.triggered_rules,
+        )

@@ -204,6 +204,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                         gaps=package.gaps,
                         profile=package.anonymous_profile,
                         banned_terms=collect_banned_terms(domain, package),
+                        triggered_rules=package.domain_triggered_rules(domain),
                         backed_predicates=backed_predicates(domain, package),
                         unbacked_predicates=unbacked_predicates(domain, package),
                         feedback=derive_feedback,

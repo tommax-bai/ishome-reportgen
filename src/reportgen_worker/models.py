@@ -152,6 +152,41 @@ class CheckAsset(_PackageModel):
     version: int
 
 
+class TriggerEvidence(_PackageModel):
+    """规则为什么触发（规则 4.3 可追溯性的户型侧对应物）。
+
+    ``type`` 首版只有 ``always`` 与 ``layout_feature``（answer/light/switch 随需求采集与清单族
+    落地时由求值线扩展，契约只增不改）；``feature`` 是户型特征标记名（闭集见 contracts
+    ``rulebook/layout_features.json``）；``evidence`` 是**这条标记成立的依据**
+    （人话，来自解析产出），报告里"因为你家阳台带家政位"的数据就来自这里。
+    ``always`` 触发时后两者为 None。
+    """
+
+    type: str
+    feature: str | None = None
+    evidence: str | None = None
+
+
+class TriggeredRule(_PackageModel):
+    """本户**已经触发**的规则条目（求值线判定完随包下发，成文线不重判触发）。
+
+    **用途限定＝"这一章该讲到什么"的输入，喂叙事推导步定主张**；``content``/``rationale`` 是内部
+    陈述句，**禁止逐字进写作 prompt 当句子抄**——示范句可抄性同病（坑单 prompt 铁律一：
+    禁止词面与现成句子进 prompt 就会被照抄）。
+
+    背书纪律不变：``calibration != "calibrated"`` 的规则**不构成判断句依据**（断言预算只认
+    calibrated，同落点）。
+    """
+
+    asset_id: str
+    layer: str
+    content: str
+    rationale: str | None = None
+    severity: str | None = None
+    calibration: str
+    triggered_by: TriggerEvidence
+
+
 class EvaluationProfile(_PackageModel):
     """匿名画像：字段全集即上限——extra=forbid 拒绝任何用户标识。
 
@@ -186,6 +221,13 @@ class ReportDataPackage(_PackageModel):
     gaps: list[GapRecord]
     personas_by_domain: dict[str, list[PersonaAsset]]
     checks_by_domain: dict[str, list[CheckAsset]]
+    triggered_rules_by_domain: dict[str, list[TriggeredRule]] = {}
+    """本户触发的规则条目，按域分组（键＝dom- 去前缀形态，同 ``personas_by_domain``）。
+
+    **消费侧先建、生产侧后发**（同 provenance 那批的顺序纪律）：缺省空 = 生产方未升级的旧包，
+    **不是"未触发"**——成文线据此不产生误判，也**不得据此拦截**。语义是"求值线判定后已经成立的
+    规则"，成文线**不重判触发**（同"成文线不重判求值线"）。
+    """
     banned_terms_by_domain: dict[str, list[str]]
     locked_texts_by_domain: dict[str, list[str]] = {}
     """本产物必挂的锁定文案 ID 集（图 v0.2 §2 报告数据包的"锁定清单"，枚举见 contracts
@@ -204,6 +246,10 @@ class ReportDataPackage(_PackageModel):
     def domain_anchors(self, domain: str) -> list[ReportAnchor]:
         """本域落点切片（单元输入只见本域，图 v0.2 §2 依赖只存在于求值线）。"""
         return [a for a in self.anchors if a.basis_tag.split("@")[0] == domain]
+
+    def domain_triggered_rules(self, domain: str) -> list[TriggeredRule]:
+        """本域触发规则切片（同 :meth:`domain_anchors`，单元输入只见本域）。"""
+        return self.triggered_rules_by_domain.get(domain, [])
 
 
 # ---------------------------------------------------------------------------

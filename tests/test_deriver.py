@@ -14,7 +14,7 @@ from reportgen_worker.deriver import (
     parse_claims,
 )
 from reportgen_worker.gate import backed_predicates, collect_banned_terms, unbacked_predicates
-from reportgen_worker.models import AnchorBrief
+from reportgen_worker.models import AnchorBrief, TriggeredRule, TriggerEvidence
 from tests.support import load_package
 
 PACKAGE = load_package()
@@ -147,3 +147,102 @@ def test_parse_rejects_garbage() -> None:
         parse_claims("模型讲了一段废话", set())
     with pytest.raises(DeriverOutputError):
         parse_claims('[{"claim": 3}]', set())
+
+
+# ---------------------------------------------------------------------------
+# 户型触发条目（2026-08-30：户型特征进报告，那批 layout_feature 规则第一次有执行器）
+# ---------------------------------------------------------------------------
+
+
+def _triggered_rule(
+    *, content: str, rationale: str | None, feature: str | None, evidence: str | None
+) -> TriggeredRule:
+    return TriggeredRule(
+        assetId="rule-practice-storage-balcony-cleaning",
+        layer="tier-practice",
+        content=content,
+        rationale=rationale,
+        severity="recommended",
+        calibration="draft",
+        triggeredBy=TriggerEvidence(
+            type="layout_feature" if feature else "always", feature=feature, evidence=evidence
+        ),
+    )
+
+
+BALCONY_RULE = _triggered_rule(
+    content="阳台留清洁工具位（含插座）",
+    rationale="吸尘器和拖把要有固定的家，还要能充电",
+    feature="balcony_service",
+    evidence="阳台内有洗衣机设备位",
+)
+
+
+def test_triggered_rules_reach_derivation_with_their_evidence() -> None:
+    """触发条目落在**推导步**不落写作步：它回答"这一章该讲什么"，而那正是推导步的题目。
+
+    依据（"因为这户：…"）必须同行下发——规则 4.3 可追溯性的户型侧对应物，
+    报告里"因为你家阳台带家政位"这句话的数据就是它。
+    """
+    request = request_for().model_copy(update={"triggered_rules": [BALCONY_RULE]})
+
+    system, user = (m["content"] for m in build_derive_messages(request))
+
+    assert "阳台留清洁工具位（含插座）" in user
+    assert "因为这户：阳台内有洗衣机设备位" in user
+    assert "必须讲到" in system  # 条目是要讲到的点，不是可选素材
+
+
+def test_always_rule_line_carries_no_empty_evidence() -> None:
+    """``always`` 条目不写依据括号：写"因为：无"会诱出"根据通用规范"这类无依据背书。"""
+    always_rule = _triggered_rule(
+        content="玄关设快递拆包位（台面或翻板）",
+        rationale="拆包在门口完成，纸箱不进屋",
+        feature=None,
+        evidence=None,
+    )
+
+    user = build_derive_messages(
+        request_for().model_copy(update={"triggered_rules": [always_rule]})
+    )[1]["content"]
+
+    assert "玄关设快递拆包位（台面或翻板）" in user
+    assert "因为这户" not in user
+
+
+def test_layout_features_go_in_as_evidence_not_as_marker_names() -> None:
+    """户型特征**只下发依据文字**：标记名是内部标识符，主张逐字进写作 prompt，混进去就上卡片。"""
+    profile = PACKAGE.anonymous_profile.model_copy(
+        update={"layout_features": {"balcony_service": "阳台内有洗衣机设备位"}}
+    )
+
+    user = build_derive_messages(request_for().model_copy(update={"profile": profile}))[1][
+        "content"
+    ]
+
+    assert "阳台内有洗衣机设备位" in user
+    assert "balcony_service" not in user  # 内部标记名一个字都不下发
+
+
+def test_parse_rejects_verbatim_copy_of_triggered_rule() -> None:
+    """条目逐字照抄判在推导步：主张逐字进写作 prompt，抄进去就会被写成卡片（示范句同病）。
+
+    prompt 里叮嘱无效已实测三次（禁词、耦合词面、示范句），故这一道是**确定性校验**。
+    """
+    raw = json.dumps(
+        [{"claim": "阳台留清洁工具位（含插座）", "anchors": []}],
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(DeriverOutputError, match="逐字照抄"):
+        parse_claims(raw, set(), (), (BALCONY_RULE,))
+
+
+def test_paraphrased_claim_passes() -> None:
+    """换成人话就放行——判的是照抄不是"讲这件事"。"""
+    raw = json.dumps(
+        [{"claim": "你家阳台带着家政位，扫地机和拖把该在那儿有个能充电的固定角落", "anchors": []}],
+        ensure_ascii=False,
+    )
+
+    assert parse_claims(raw, set(), (), (BALCONY_RULE,))[0].claim.startswith("你家阳台")
