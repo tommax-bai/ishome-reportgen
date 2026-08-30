@@ -42,7 +42,7 @@ def test_anchor_lines_carry_presentation_tier() -> None:
     """
     user = build_messages(request_for())[1]["content"]
     assert "lkp-counter-height" in user
-    assert "没有外部依据，用「我们建议…」的口吻" in user
+    assert "没有外部背书，用「我们建议…」的口吻" in user
     assert "- 主通道净宽｜可作支点" in user
     assert "｜可作支点" in user
 
@@ -53,9 +53,19 @@ def test_prompt_warns_that_anchor_names_carry_banned_words() -> None:
 
     不改数据改说法：名字是内部标签，`照度`/`净宽` 这类工程词在落点名里是准确的，
     要求它们改成业主词面反而会把「照度」写成「亮度」——两个物理量。语域分界在**正文**，不在标签。
+
+    形态是**逐行点名**（数据驱动 banned ∩ name），不是一句全局提醒：推导步 2026-08-29 实测
+    全局那句压不过逐行复现，出文步 2026-08-30 才补上——在此之前灯光域 13 条落点里 7 条题名
+    带「照度」逐行递过去，只有一句全局禁令压着，真跑里「照度」照样进正文。
     """
-    system = build_messages(request_for())[0]["content"]
-    assert "落点的名字里可能就带着禁词" in system
+    request = request_for()
+    request.banned_terms = [*request.banned_terms, "净宽"]
+    request.anchors[0].name = "主通道净宽"
+    user = build_messages(request)[1]["content"]
+    assert "（题名里的 「净宽」 是内部词" in user
+    # 全局那句自己不许再写禁词面（真跑立案：原文举例「照度标准值」，一句话踩两个禁词）
+    system = build_messages(request)[0]["content"]
+    assert "照度" not in system
 
 
 def test_city_tier_stays_out_of_prompt() -> None:
@@ -213,7 +223,7 @@ def test_unbacked_anchor_enters_prompt() -> None:
     """
     user = build_messages(request_for())[1]["content"]
     assert "lkp-wardrobe-rod" in user
-    assert "没有外部依据，用「我们建议…」的口吻" in user
+    assert "没有外部背书，用「我们建议…」的口吻" in user
 
 
 def test_assertion_budget_split_in_prompt() -> None:
@@ -372,3 +382,86 @@ def test_item_names_are_flagged_as_internal_labels() -> None:
     system = build_messages(request_for("lighting"))[0]["content"]
 
     assert "记号里点号后面那一段（项名）同样是内部标签" in system
+
+
+def test_rewrite_carries_earlier_rounds_reasons_and_flags_repeats() -> None:
+    """更早几稿只带**打回原因**，并把"这条你已经栽过"标在当条违规后面（用户裁决 2026-08-30）。
+
+    立案证据：2026-08-30 晚六跑，两跑失败形态都是同一个禁词连吃三稿（「照度」「宜」）。
+    模型每一轮只看得见"这一稿哪儿错"，看不见"上一轮我也是这么写的"，于是原样再写一遍。
+
+    只带原因不带原稿有两条理由，指向同一件事——要它换写法不是改字：旧稿摆在眼前，改动会退化成
+    在旧句子上挪字；被打回的词反复出现在 prompt 里，也容易把它钉死在那个词上。
+    """
+    request = request_for()
+    request.attempt = 2
+    request.previous_cards = [
+        Card(thesis="台面按人定。", body="切菜时手腕是平的。", number_refs=[])
+    ]
+    request.earlier_feedback = [
+        [Violation(check="gate-banned-term", detail="card[3] 禁词「照度」 → 换人话说")]
+    ]
+    request.feedback = [
+        Violation(check="gate-banned-term", detail="card[0] 禁词「照度」 → 换人话说")
+    ]
+    user = build_messages(request)[1]["content"]
+    assert "更早几稿也被打回过" in user
+    assert "第 1 稿：[gate-banned-term] card[3] 禁词「照度」" in user
+    assert "第 1 稿也栽在这条" in user
+    # 历史排在当前稿之前：先读"这条走过了"，再读"这一稿改哪儿"
+    assert user.index("更早几稿也被打回过") < user.index("上一稿（第 2 稿）")
+
+
+def test_repeat_flag_keys_on_check_not_on_card_index() -> None:
+    """同一条判据换了张卡触发，仍算"没改掉"——措辞挪个位置不是改掉。"""
+    request = request_for()
+    request.attempt = 3
+    request.previous_cards = [Card(thesis="台面按人定。", body="手腕是平的。", number_refs=[])]
+    request.earlier_feedback = [
+        [Violation(check="cr-weak-word", detail="card[1] 「宜」分析级结论句禁弱词")],
+        [Violation(check="cr-weak-word", detail="card[4] 「宜」分析级结论句禁弱词")],
+    ]
+    request.feedback = [Violation(check="cr-weak-word", detail="card[0] 「宜」分析级结论句禁弱词")]
+    user = build_messages(request)[1]["content"]
+    assert "第 1、2 稿也栽在这条" in user
+
+
+def test_first_draft_carries_no_history() -> None:
+    """第一稿没有历史段——没被打回过就不该出现"更早几稿"。"""
+    user = build_messages(request_for())[1]["content"]
+    assert "更早几稿" not in user
+
+
+def test_prompt_does_not_itself_write_the_words_it_bans() -> None:
+    """**我们自己写的那部分 prompt，一个禁词都不许出现**（2026-08-30 立案）。
+
+    真跑证据：纪律第 6 条原文是"落点的名字里**可能**就带着禁词（如「**照度**标准值」）"——
+    一句话踩两个禁词；「依据」在 prompt 里出现 4 次。而灯光域 13 条落点里 7 条题名带「照度」，
+    模型全篇看见「照度」9 次、8 次是我们递过去的，然后被要求"一个都不能出现"。
+    禁词进正文首先是 prompt 自相矛盾，不是模型不听话。
+
+    两处**必然**含词面，从检查范围里剔除，且只剔这两处：①禁词表本身（要告诉它禁哪些）；
+    ②题名撞词的逐行点名（那个词已经在题名里，点名是贴标签不是塞新词面，故不违铁律一）。
+    """
+    banned = ["照度", "显指", "可能", "也许", "依据", "推导", "保证", "宜", "责任", "本方案"]
+    request = request_for()
+    request.banned_terms = banned
+    system = build_messages(request)[0]["content"]
+    system = system.replace("、".join(banned), "")  # ①禁词表本身
+    leaked = [t for t in banned if t in system]
+    assert not leaked, f"prompt 自己写了禁词：{leaked}"
+
+
+def test_discipline_quotes_the_labels_the_anchor_lines_actually_print() -> None:
+    """纪律里引用的档名，必须是落点行**真的印出来的那几个字**（2026-08-30 立案）。
+
+    原文写"标【未过门·建议口吻】的照常用"，而落点行印的是「没有外部背书，用「我们建议…」的口吻」
+    ——纪律指着一个 prompt 里不存在的标签。与同日"prompt 自己写禁词"是同一族：
+    **指令与它所描述的输入对不上**，模型只能猜，猜错就是一轮重写。
+    """
+    request = request_for()
+    system, user = (m["content"] for m in build_messages(request))
+    for label in ("可作支点", "没有外部背书"):
+        assert label in system, f"纪律没提到档名「{label}」"
+        assert label in user, f"落点行没印出档名「{label}」"
+    assert "未过门" not in system  # 已废的标签不再出现在纪律里

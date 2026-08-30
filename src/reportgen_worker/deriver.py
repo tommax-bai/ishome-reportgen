@@ -34,6 +34,7 @@ from typing import Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
+from reportgen_worker.gate import CHINESE_NUMBER_RE, DIGIT_RE
 from reportgen_worker.models import (
     AnchorBrief,
     EvaluationProfile,
@@ -82,14 +83,60 @@ class DeriveRequest(BaseModel):
     feedback: list[str] = []
     """上一次推导被打回的理由（重试时下发）：同写作那条循环的形态——不告诉它哪儿错了，
     它只会把同一句再写一遍（真跑实测：同一个禁词连吃三稿）。"""
+    previous_claims: list[NarrativeClaim] = []
+    """上一稿的主张，原样带回（用户裁决 2026-08-30，射程＝**所有裁判场**）。
+
+    此前这一步只递一句错误文字、稿子本身不回传——与写作步 2026-08-30 早先修掉的是同一个毛病，
+    只是漏在了这一步。真跑立案（2026-08-30 晚 w2）：「一起定」连吃三轮，整单元死在推导步。"""
+    earlier_feedback: list[list[str]] = []
+    """更早几稿的打回理由，由旧到新、不含最近这一稿（同写作步）：只带理由不带原稿，
+    让它看见"这条我已经试过了"——缺的正是这句话。"""
 
 
 class DeriverOutputError(Exception):
-    """推导输出不可解析或为空——作为违规进入重写循环，不静默退回"没有主张"的老形态。"""
+    """推导输出不可解析或为空——作为违规进入重写循环，不静默退回"没有主张"的老形态。
+
+    **带着被打回的那一稿**（``claims``，解析得出来时）：打回要带原文是所有裁判场的统一形态
+    （用户裁决 2026-08-30），而这一步的"原文"就是它刚写出来的那组主张。
+    """
+
+    def __init__(self, message: str, claims: Sequence[NarrativeClaim] = ()) -> None:
+        super().__init__(message)
+        self.claims = list(claims)
 
 
 class NarrativeDeriver(Protocol):
     async def derive(self, request: DeriveRequest) -> list[NarrativeClaim]: ...
+
+
+def _rewrite_part(request: DeriveRequest) -> str:
+    """打回段：**更早各轮的理由 + 上一稿原文 + 这一稿哪儿错**。
+
+    形态出自用户裁决 2026-08-30，射程是**所有裁判场**。
+
+    与写作步同一形态、同一理由：只递一句错误文字而不回传稿子，等于让它"逐条改"一份它看不见的
+    东西；不给更早几轮，它看不见"这条我已经试过了"。真跑立案（2026-08-30 晚 w2）：「一起定」
+    连吃三轮，整单元死在这一步——写作步早先修掉的毛病原样漏在这里。
+
+    更早各轮**只留理由不留原稿**：原稿摆在眼前，改动会退化成在旧句子上挪字。
+    """
+    lines: list[str] = []
+    if request.earlier_feedback:
+        lines.append(
+            "更早几稿也被打回过（只给理由，原稿不附——要的是换个说法，不是在旧句子上改字）："
+        )
+        for draft, reasons in enumerate(request.earlier_feedback, start=1):
+            lines.append(f"  第 {draft} 稿：{'；'.join(reasons) or '（无）'}")
+        lines.append("")
+    if request.previous_claims:
+        lines.append("上一稿在下面。**只改被打回的地方，没点到的主张原样抄回**（改动越少越好）：")
+        lines.extend(f"  {i + 1}. {c.claim}" for i, c in enumerate(request.previous_claims))
+    seen = {r for round_ in request.earlier_feedback for r in round_}
+    lines.append("这一稿被打回的理由：")
+    for f in request.feedback:
+        again = " ← 前面几稿也栽在这条，上次那个改法没用，换一种说法" if f in seen else ""
+        lines.append(f"  ✗ {f}{again}")
+    return "\n".join(lines)
 
 
 def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
@@ -106,7 +153,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "你这一步连值都没拿到；\n"
         "3. **先把落点按「其实是同一件事」归组，再给每组写一条主张**——"
         "一个落点一条主张等于把落点表换了个排版，那正是要修的东西。"
-        "归组的依据是**同属一件事**（同一件家具、同一个动作、同一个空间）——"
+        "归组的理由是**同属一件事**（同一件家具、同一个动作、同一个空间）——"
         "床面高和床侧净距同属「床」，**就该进同一条主张**，正文里各给各的理由；"
         "但**不许把同组落点写成相互约束的关系**（说 A 的取值牵制 B、两者要配合着调整之类）——"
         "数据里没有这种联动就不许说。归组照做，关系别编——这是两件事；"
@@ -117,7 +164,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "（每条都要落进某条主张里）；「通行做法条目」**可以讲到，但别为它挤掉这一户的事**——"
         "前者是这户独有的，后者对谁都成立。两档都**用你自己的话讲**："
         "条目是内部写法，逐字搬进主张会被机检打回。讲户型条目时带上它**为什么对这户成立**"
-        "（条目后面括号里那句就是依据）——「因为你家阳台带家政位」这种话才是业主要看的，"
+        "（条目后面括号里那句就是理由）——「因为你家阳台带家政位」这种话才是业主要看的，"
         "凭空说「阳台要留清洁位」不是；\n"
         "3d. 有的落点**分了项**（同一件事的不同场合、档位或分项，清单里逐条标着分几项）——"
         "这几项是分开讲还是合起来讲**由你定**：对这家人真是两回事（不同场合、不同档位）"
@@ -135,8 +182,8 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
         "不要为了铺满而拆出没有取舍的主张；\n"
         f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）：{banned}。"
-        "**落点的名字里可能就带着这些词**——那是内部标签不是说法，"
-        "你在主张里要换成人话（例如别写「净宽」，写「能不能并排走过去」）；\n"
+        "**落点的题名里就带着其中一些**——带了的那几条已在下面逐行标出来。"
+        "题名是内部标签不是说法，你在主张里要换成业主读得懂的话；\n"
         '输出：JSON 数组，每个元素 {"claim": 主张, "anchors": [用到的落点 id]}，'
         "不要输出数组以外的任何内容。"
     )
@@ -174,7 +221,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     always_rules = [r for r in request.triggered_rules if not r.triggered_by.evidence]
     if by_layout:
         user_parts.append(
-            "这套户型触发的条目（**必须讲到**，换成人话讲；括号里是它对这户成立的依据）：\n"
+            "这套户型触发的条目（**必须讲到**，换成人话讲；括号里是它对这户成立的理由）：\n"
             + "\n".join(_rule_line(r) for r in by_layout)
         )
     if always_rules:
@@ -183,9 +230,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
             + "\n".join(_rule_line(r) for r in always_rules)
         )
     if request.feedback:
-        user_parts.append(
-            "上一稿被打回，逐条改：\n" + "\n".join(f"- {f}" for f in request.feedback)
-        )
+        user_parts.append(_rewrite_part(request))
     if request.gaps:
         user_parts.append(
             "本次求不出的落点（「这件事现在还算不出来」本身可以是一条主张）：\n"
@@ -224,7 +269,7 @@ def parse_claims(
     空数组是**失败**不是"没什么可讲"：一域有落点却推导不出一件事，说明这一步没工作；
     静默放行会让下一步退回没有主张的老形态，而那正是这一步要修的东西（绝不静默假成功）。
 
-    四道确定性校验（耦合词面、禁词、条目照抄、**项名**）走的是同一条理由：主张逐字进写作
+    五道确定性校验（耦合词面、禁词、条目照抄、**项名**、**数字**）走的是同一条理由：主张逐字进写作
     prompt，内部词面混进去就会出现在卡片上，而 prompt 里叮嘱压不住已实测三次。
     """
     match = _JSON_BLOCK_RE.search(raw)
@@ -240,12 +285,35 @@ def parse_claims(
         if claim.claim.strip()
     ]
     if not cleaned:
-        raise DeriverOutputError("推导没有产出任何主张")
+        raise DeriverOutputError(
+            "推导没有产出任何主张",
+            claims=cleaned,
+        )
+    # 数字：推导步纪律第 2 条明写"不许出现任何数字"，此前**只在 prompt 里叮嘱、没有校验**——
+    # 而"prompt 叮嘱压不住"正是上面四道存在的理由，这一道漏了。真跑立案（2026-08-30 晚）：
+    # 主张写"暖冷调子加起来不能超过三种"，逐字进写作 prompt，写作步照抄后被 gate-chinese-numeral
+    # 打回；重写两轮拿到的主张还是那句——连吃三稿的老形态换了条判据重演。
+    # 与写作步同一份正则（同一份口径，坑单三）：列举计数不在射程内（"四个区域"不算数）。
+    numerals = sorted(
+        {
+            found.group(0)
+            for pattern in (DIGIT_RE, CHINESE_NUMBER_RE)
+            for c in cleaned
+            if (found := pattern.search(c.claim))
+        }
+    )
+    if numerals:
+        raise DeriverOutputError(
+            f"主张里写了数 {numerals}——数字是下一步的事，你这一步连值都没拿到。"
+            "把那句话改成不带数的说法：要说这件事有个上限，就说「有上限」，别说上限是多少",
+            claims=cleaned,
+        )
     coupling = sorted({w for w in COUPLING_PHRASES for c in cleaned if w in c.claim})
     if coupling:
         raise DeriverOutputError(
             f"主张里写了落点间的相互约束措辞 {coupling}——两条尺寸同属一件事不等于互相牵制，"
-            "并列着说、各给各的理由，别说它们要配合着定"
+            "并列着说、各给各的理由，别说它们要配合着定",
+            claims=cleaned,
         )
     hits = sorted({t for t in banned_terms for c in cleaned if t in c.claim})
     if hits:
@@ -253,7 +321,8 @@ def parse_claims(
         # 真跑两次证明写作步兜不住（拿到带禁词的主张，连吃三稿都在同一个词上被打回，
         # 而下一稿拿到的主张还是那句）。判在这一步，写作步才有一份干净的骨架。
         raise DeriverOutputError(
-            f"主张里出现禁词 {hits}——这几个词下一步照抄就会被机检打回，换人话重写"
+            f"主张里出现禁词 {hits}——这几个词下一步照抄就会被机检打回，换人话重写",
+            claims=cleaned,
         )
     copied = sorted(
         {
@@ -267,7 +336,8 @@ def parse_claims(
         # 条目逐字照抄＝把内部写法搬进主张，而主张逐字进写作 prompt（示范句可抄性同病，
         # 三次真跑证明 prompt 里叮嘱压不住）。判在这一步，写作步才拿得到人话骨架。
         raise DeriverOutputError(
-            f"主张逐字照抄了触发条目 {copied}——那是内部写法，用业主听得懂的话重讲一遍"
+            f"主张逐字照抄了触发条目 {copied}——那是内部写法，用业主听得懂的话重讲一遍",
+            claims=cleaned,
         )
     # 项名同路（规则 1.9 三"项名不进业主视野"，v2.8）：项名从这一版起进推导入参，
     # 而主张逐字进写作 prompt——内部记号混进去就会出现在卡片上。词边界匹配，
@@ -285,7 +355,8 @@ def parse_claims(
     if leaked:
         raise DeriverOutputError(
             f"主张里写了分项记号 {leaked}——那是内部记号不是说法，"
-            "用人话说那一项是什么场合、什么档位（下一步照抄就会写进卡片）"
+            "用人话说那一项是什么场合、什么档位（下一步照抄就会写进卡片）",
+            claims=cleaned,
         )
     return cleaned
 

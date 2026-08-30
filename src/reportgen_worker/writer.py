@@ -85,6 +85,14 @@ class WriterRequest(BaseModel):
     稿子，它实际是从头再写一章、只是被告知上次踩了哪些坑。真跑症状对得上：违规在卡片之间跳
     （这一轮 card[3]、下一轮 card[4]），同一条错两轮都在。带回原稿后，打回从"重写一章并避开这些
     坑"变成"这张卡这一句改掉"。"""
+    earlier_feedback: list[list[Violation]] = []
+    """更早几稿的打回原因，**由旧到新，不含最近这一稿**（用户裁决 2026-08-30）。
+
+    只带原因不带原稿：原稿留着既占地方，又容易把它钉死在旧写法上——要它改的是写法，不是对着
+    旧句子改字。用途是让模型看见"这条我已经试过了"：真跑里禁词与弱词两跑都是同一个词连写三稿，
+    模型每一轮只看得见"这一稿哪儿错"、看不见"上一轮我也是这么写的"，于是原样再写一遍。
+    换成什么词由写手自己判断——判据只说这个词不行，不给替代说法（判据不写字，替代说法固定进
+    词表即人预设模板）。"""
     attempt: int = 0
 
 
@@ -242,7 +250,7 @@ def _wording_note(anchor: ReportAnchor) -> list[str]:
     return lines
 
 
-def _anchor_line(anchor: ReportAnchor) -> str:
+def _anchor_line(anchor: ReportAnchor, banned_terms: Sequence[str] = ()) -> str:
     """落点的下发行：题名 + 值 + 语域档 + **这条落点可以怎么引用**（规则 1.9，v2.8）。
 
     合法写法**逐行摆出来**（数据驱动：记号从 value 里的项算出来，不是编的）——同"撞禁词的落点
@@ -257,9 +265,19 @@ def _anchor_line(anchor: ReportAnchor) -> str:
     tier = (
         "可作支点"
         if anchor.presentation == THESIS_SUPPORT
-        else "没有外部依据，用「我们建议…」的口吻"
+        else "没有外部背书，用「我们建议…」的口吻"
     )
-    return "\n".join([f"- {anchor.name}｜{tier}", *_wording_note(anchor)])
+    # 题名撞禁词的落点**逐行点名**（数据驱动：banned ∩ name）。推导步 2026-08-29 已装此形态，
+    # 出文步一直漏着——而正文正是在这一步写出来的：灯光域 13 条落点里 7 条题名带「照度」，
+    # 逐行递给模型 7 遍，再拿一句全局"一个都不能出现"去压，真跑里「照度」照样进正文。
+    # 与铁律一不冲突：这里不是把新词面塞进 prompt，是给已经不得不出现在输入里的那个词贴标签。
+    hits = "、".join(f"「{t}」" for t in banned_terms if t in anchor.name)
+    taboo = (
+        [f"  （题名里的 {hits} 是内部词，正文里一个字都不能出现，换业主读得懂的说法）"]
+        if hits
+        else []
+    )
+    return "\n".join([f"- {anchor.name}｜{tier}", *_wording_note(anchor), *taboo])
 
 
 _CARD_INDEX_RE = re.compile(r"^card\[(\d+)\]\s*")
@@ -271,20 +289,30 @@ def _rewrite_part(request: WriterRequest) -> str:
     违规的 detail 以 ``card[i]`` 开头（:mod:`reportgen_worker.gate` 的既有形态），据此归位；
     归不到某张卡的（整稿级的，如卡片数多于主张）单列。归位是这一段的要害：一张清单摊在稿子外面，
     模型得自己数到第几张；挂在卡下面，它看到的就是"这一张的这一句要改"。
+
+    再往前几稿的打回**只留原因不留原稿**，并把"这一条你已经栽过"直接标在当条违规后面：
+    真跑里连写三稿同一个禁词的两跑，缺的正是这句话。
     """
     by_card: dict[int, list[str]] = {}
     loose: list[str] = []
+    repeated = _repeat_notes(request.earlier_feedback)
     for violation in request.feedback:
         match = _CARD_INDEX_RE.match(violation.detail)
-        line = f"    ✗ [{violation.check}] {_CARD_INDEX_RE.sub('', violation.detail)}"
+        note = repeated.get(violation.check, "")
+        line = f"    ✗ [{violation.check}] {_CARD_INDEX_RE.sub('', violation.detail)}{note}"
         if match:
             by_card.setdefault(int(match.group(1)), []).append(line)
         else:
-            loose.append(f"  ✗ [{violation.check}] {violation.detail}")
+            loose.append(f"  ✗ [{violation.check}] {violation.detail}{note}")
 
+    history = _history_part(request.earlier_feedback)
     if not request.previous_cards:
-        return f"上一稿（第 {request.attempt} 稿）被机检打回，逐条修正：\n" + "\n".join(
-            f"- [{v.check}] {v.detail}" for v in request.feedback
+        return (
+            history
+            + f"上一稿（第 {request.attempt} 稿）被机检打回，逐条修正：\n"
+            + "\n".join(
+                f"- [{v.check}] {v.detail}{repeated.get(v.check, '')}" for v in request.feedback
+            )
         )
 
     lines = [
@@ -296,7 +324,36 @@ def _rewrite_part(request: WriterRequest) -> str:
         lines.append(f"[{index}] 主旨：{card.thesis}")
         lines.append(f"    正文：{card.body}")
         lines.extend(by_card.get(index, []))
-    return "\n".join(lines)
+    return history + "\n".join(lines)
+
+
+def _repeat_notes(earlier: list[list[Violation]]) -> dict[str, str]:
+    """判据 id → "第 N 稿也栽在这条"。**按判据 id 归并、不按 detail**：同一条判据在不同卡片
+    上触发仍是同一个毛病没改掉，措辞挪了个位置不算改掉。"""
+    drafts_by_check: dict[str, list[int]] = {}
+    for draft, violations in enumerate(earlier, start=1):
+        for violation in violations:
+            drafts_by_check.setdefault(violation.check, []).append(draft)
+    return {
+        check: f" ← 第 {'、'.join(str(d) for d in sorted(set(drafts)))} 稿也栽在这条，"
+        "上一轮那个改法没用，这次换一种写法，别把同样的话再写一遍"
+        for check, drafts in drafts_by_check.items()
+    }
+
+
+def _history_part(earlier: list[list[Violation]]) -> str:
+    """更早几稿：只列原因，不附原稿。
+
+    不附原稿有两条理由，都指向同一件事——要它换写法而不是改字：原稿摆在眼前，改动会退化成
+    在旧句子上挪字；被打回的词反复出现在 prompt 里，也容易把它钉死在那个词上。
+    """
+    if not earlier:
+        return ""
+    lines = ["更早几稿也被打回过（只给原因，原稿不附——要的是换个写法，不是在旧句子上改字）："]
+    for draft, violations in enumerate(earlier, start=1):
+        reasons = "；".join(f"[{v.check}] {v.detail}" for v in violations) or "（无）"
+        lines.append(f"  第 {draft} 稿：{reasons}")
+    return "\n".join(lines) + "\n\n"
 
 
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
@@ -341,20 +398,22 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "**每条落点下面写着这个空要填的值是什么特征**（是一个确定的数、还是只给了上限/下限、"
         "还是一个范围），照那句话写：只给一侧的必须在记号前面写清是上限还是下限（可用的词逐字"
         "列在那里），是确定的数就别加限定词；**单位一律由记号自己带出来，正文里不要再写一遍**；\n"
-        "3. 落点分两档：标【可作支点】的可以拿来下判断；标【未过门·建议口吻】的照常用，"
-        "**主旨句里也可以出现**，但语域限「我们建议…」「按行业通行做法…」，"
-        "不许写成「国标要求」「必须」这类标准口吻——它没有外部依据背书；\n"
+        "3. 落点分两档，档写在每条落点题名后面的「｜」右边："
+        "「可作支点」的可以拿来下判断；「没有外部背书」的照常用，**主旨句里也可以出现**，"
+        "但语域限「我们建议…」「按行业通行做法…」，"
+        "不许写成「国标要求」「必须」这类标准口吻；\n"
         "4. 不许把 lkp- 开头的内部编号写进正文或主旨句——业主不认识这些编号。"
-        "要用它的数字就写 {lkp-id} 占位；要说这条没有依据背书，用人话说（如"
+        "要用它的数字就写 {lkp-id} 占位；要说这条没有背书，用人话说（如"
         "「这一项目前只能给参考范围」），不要点名编号。"
         "**记号里点号后面那一段（项名）同样是内部标签**：它只出现在记号里，"
         "那一项是哪个场合、哪个档位、哪个分项，正文里用人话说；\n"
         f"5. 判断句只允许落在这几个题目上：{backed}。"
         "写了判断句就在 assertions 里声明用的是哪一个；其余题目这轮没有背书，不许下结论；\n"
         f"6. 禁词（一个都不能出现）：{banned}。"
-        "**落点的名字里可能就带着禁词**（如「主通道净宽」「照度标准值」）——名字是内部标签，"
-        "不是要你照抄的说法：引用它的数字写 {lkp-id} 占位，那件事本身用人话说；\n"
-        "7. 没有外部依据或已过期的落点，它的**来源与取数时间由系统自动挂在这一页上**，"
+        "**落点的题名里就带着其中一些**——带了的那几条已在下面逐行标出来。"
+        "题名是内部标签，不是要你照抄的说法：引用它的数字写 {lkp-id} 占位，"
+        "那件事本身用业主读得懂的话说；\n"
+        "7. 没有外部背书或已过期的落点，它的**来源与取数时间由系统自动挂在这一页上**，"
         "你不要在正文里写来源、标准号或日期——写了既是裸数字违规，也会和系统挂的那份对不上；\n"
         f"{claims_discipline}"
         f"{samples}"
@@ -363,7 +422,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         '"assertions": [声明使用的判断句题目]}，'
         "不要输出数组以外的任何内容。"
     )
-    anchor_lines = [_anchor_line(a) for a in request.anchors]
+    anchor_lines = [_anchor_line(a, request.banned_terms) for a in request.anchors]
     gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in request.gaps]
     user_parts = [
         f"领域：{request.domain}",

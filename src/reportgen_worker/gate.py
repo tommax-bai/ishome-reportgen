@@ -764,7 +764,7 @@ def run_unit_gate(
                         check="gate-assertion-not-budgeted",
                         detail=(
                             f"{label} 谓词「{predicate}」不在本域断言预算内 → "
-                            f"只能用这几个：{sorted(budget)}"
+                            f"只能用这几个：{'、'.join(sorted(budget))}"
                         ),
                     )
                 )
@@ -772,13 +772,20 @@ def run_unit_gate(
             missing = [r for r in requires if r not in anchor_ids]
             degraded = [r for r in requires if r in anchor_ids and r not in supported]
             if missing or degraded:
+                # 空的那一半不印（打回要简洁，用户裁决 2026-08-30）：真跑里出过
+                # "背书不足（缺 []、降档 ['lkp-cct-variety-max']）"——那个 `[]` 对读它的模型是噪声。
+                why = "、".join(
+                    part
+                    for part in (
+                        f"这几条本域没有：{'、'.join(missing)}" if missing else "",
+                        f"这几条这轮降了档：{'、'.join(degraded)}" if degraded else "",
+                    )
+                    if part
+                )
                 violations.append(
                     Violation(
                         check="gate-assertion-unbacked",
-                        detail=(
-                            f"{label} 谓词「{predicate}」背书不足（缺 {missing}、降档 {degraded}）"
-                            " → 这轮别用它下判断"
-                        ),
+                        detail=(f"{label} 谓词「{predicate}」背书不足（{why}） → 这轮别用它下判断"),
                     )
                 )
 

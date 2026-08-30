@@ -144,6 +144,10 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     judge_run: JudgeRun | None = None
     claims: list[NarrativeClaim] = []
     derive_feedback: list[str] = []
+    # 推导步同写作步（用户裁决 2026-08-30，射程＝所有裁判场）：上一稿原样带回 + 更早各轮只带理由。
+    # 真跑立案 2026-08-30 晚：「一起定」连吃三轮，整单元死在推导步——写作步早先修掉的毛病漏在这里。
+    previous_claims: list[NarrativeClaim] = []
+    derive_earlier: list[list[str]] = []
 
     def failed(violations: list[Violation], rewrites: int = 0) -> ActivityResult:
         return UnitComposeResult(
@@ -194,6 +198,9 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     blocking = blocking_check_ids(domain, package)
     feedback: list[Violation] = []
     previous_cards: list[Card] = []
+    # 更早几稿的打回原因（用户裁决 2026-08-30）：只攒原因不攒原稿。模型每一轮只看得见"这一稿
+    # 哪儿错"，看不见"上一轮我也是这么写的"——真跑里禁词、弱词两跑都是同一个词连写三稿。
+    earlier_feedback: list[list[Violation]] = []
     for attempt in range(request.max_rewrites + 1):
         # 叙事推导（图 v0.2 §3 第一步）：只跑一次，重写循环重跑的是写作不是推导——
         # 打回的理由是卡片怎么写，不是这一章该讲什么。推导本身失败才重来（网关抖动/输出不可解析）。
@@ -211,12 +218,17 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                         backed_predicates=backed_predicates(domain, package),
                         unbacked_predicates=unbacked_predicates(domain, package),
                         feedback=derive_feedback,
+                        previous_claims=previous_claims,
+                        earlier_feedback=list(derive_earlier),
                     )
                 )
             except DeriverOutputError as e:
                 # 不退回"没有主张照样写"：那正是这一步要修的老形态，静默退回＝静默假成功。
                 # 打回理由回流进下一次推导——不告诉它哪儿错了，它只会把同一句再写一遍。
+                if derive_feedback:
+                    derive_earlier.append(derive_feedback)
                 derive_feedback = [str(e)]
+                previous_claims = e.claims
                 feedback = [Violation(check="gate-narrative-derive-failed", detail=str(e))]
                 continue
         writer_request = WriterRequest(
@@ -232,8 +244,11 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             feedback=feedback,
             # 上一稿原样带回（用户裁决 2026-08-30）：不带回等于让它"逐条修正"一份看不见的稿子
             previous_cards=previous_cards,
+            earlier_feedback=list(earlier_feedback),  # 快照：本轮的 feedback 稍后才进历史
             attempt=attempt,
         )
+        if feedback:
+            earlier_feedback.append(feedback)
         try:
             cards = await writer.write(writer_request)
         except WriterOutputError as e:

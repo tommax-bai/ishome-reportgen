@@ -14,7 +14,12 @@ from reportgen_worker.deriver import (
     parse_claims,
 )
 from reportgen_worker.gate import backed_predicates, collect_banned_terms, unbacked_predicates
-from reportgen_worker.models import AnchorBrief, TriggeredRule, TriggerEvidence
+from reportgen_worker.models import (
+    AnchorBrief,
+    NarrativeClaim,
+    TriggeredRule,
+    TriggerEvidence,
+)
 from tests.support import load_package
 
 PACKAGE = load_package()
@@ -330,3 +335,59 @@ def test_always_rules_are_downweighted_against_this_household() -> None:
     household_block = user.split("通行做法条目")[0]
     assert "阳台留清洁工具位（含插座）" in household_block
     assert "全屋色温种类不超过三种" not in household_block
+
+
+def test_derive_prompt_does_not_itself_write_the_words_it_bans() -> None:
+    """**我们自己写的那部分 prompt，一个禁词都不许出现**（2026-08-30 立案，与写作步同守卫）。
+
+    推导的产物逐字进写作 prompt（坑单三），所以这一步的自相矛盾会一路传到正文：
+    原文四处写「依据」、一处写「可能」，而两者都在公共禁词表里。
+
+    禁词表本身**必然**含词面（要告诉它禁哪些），从检查范围里剔除，且只剔这一处。
+    """
+    banned = ["照度", "显指", "可能", "也许", "依据", "推导", "保证", "宜", "责任", "本方案"]
+    request = copy.deepcopy(request_for())
+    request.banned_terms = banned
+    system = build_derive_messages(request)[0]["content"]
+    system = system.replace("、".join(banned), "")
+    leaked = [t for t in banned if t in system]
+    assert not leaked, f"推导 prompt 自己写了禁词：{leaked}"
+
+
+def test_parse_claims_rejects_numbers_in_claims() -> None:
+    """第五道确定性校验：主张里不许有数（推导步纪律第 2 条，此前只在 prompt 里叮嘱）。
+
+    真跑立案（2026-08-30 晚）：主张写"暖冷调子加起来不能超过三种"，逐字进写作 prompt，
+    写作步照抄后被 gate-chinese-numeral 打回，而重写两轮拿到的主张还是那句——
+    "连吃三稿"的老形态换了条判据重演。判在这一步，写作步才有一份不带数的骨架。
+    """
+    with pytest.raises(DeriverOutputError, match="主张里写了数"):
+        parse_claims('[{"claim": "你家所有灯的调子加起来不能超过三种。", "anchors": []}]', set())
+    with pytest.raises(DeriverOutputError, match="主张里写了数"):
+        parse_claims('[{"claim": "台面高度按 900 定。", "anchors": []}]', set())
+    # 列举计数不在射程（与写作步同一份口径）：数东西不是报数值
+    claims = parse_claims('[{"claim": "你家这四个区域的光要分开想。", "anchors": []}]', set())
+    assert len(claims) == 1
+
+
+def test_derive_rewrite_carries_previous_claims_and_earlier_reasons() -> None:
+    """推导步同写作步：带回上一稿 + 更早各轮只带理由 + 重复犯的标出来（射程＝所有裁判场）。
+
+    真跑立案（2026-08-30 晚 w2）：「一起定」连吃三轮，整单元死在推导步——此前这一步只递一句
+    错误文字、稿子本身不回传，与写作步早先修掉的是同一个毛病，只是漏在了这一步。
+    """
+    request = copy.deepcopy(request_for())
+    request.previous_claims = [NarrativeClaim(claim="床面高和床侧净距得一起定。", anchors=[])]
+    request.earlier_feedback = [["主张里写了落点间的相互约束措辞 ['一起定']"]]
+    request.feedback = ["主张里写了落点间的相互约束措辞 ['一起定']"]
+    user = build_derive_messages(request)[1]["content"]
+    assert "更早几稿也被打回过" in user
+    assert "床面高和床侧净距得一起定。" in user
+    assert "前面几稿也栽在这条" in user
+
+
+def test_parse_claims_error_carries_the_rejected_draft() -> None:
+    """打回带原文：这一步的"原文"就是它刚写出来的那组主张，挂在异常上传回重试。"""
+    with pytest.raises(DeriverOutputError) as excinfo:
+        parse_claims('[{"claim": "床面高和床侧净距得一起定。", "anchors": []}]', set())
+    assert [c.claim for c in excinfo.value.claims] == ["床面高和床侧净距得一起定。"]
