@@ -42,9 +42,9 @@ from reportgen_worker.gate import (
     CHINESE_NUMBER_RE,
     DIGIT_RE,
     PLACEHOLDER_RE,
+    REF_SEPARATOR,
     THESIS_SUPPORT,
     bound_expectation,
-    item_tokens,
 )
 from reportgen_worker.models import (
     Card,
@@ -171,75 +171,75 @@ def judgment_pairs(
     return pairs
 
 
-def _wording_note(anchor: ReportAnchor) -> str:
-    """**这个空要填的值是什么特征**，写在记号旁边（用户裁决 2026-08-30 的前半句）。
+# 读者看到的样子＝值 + 单位（用户裁决 2026-08-30 晚："你写"与"读者看到"并排给出来）。
+# **这是渲染层那条规则在本仓的第二处实现**（坑单第 10 条同型，已知代价非疏忽）：要在下发行里
+# 逐字写出记号会变成什么，就绕不开拼一次"数+单位"。两处都改才算改完。并列场合不拼
+# （要中文展示名，那在 contracts 词表里），只说"它会连单位一起并排出来"。
+def _reader_sees(anchor: ReportAnchor, value: object) -> str:
+    if isinstance(value, dict):
+        body = (
+            f"{value['min']}–{value['max']}"
+            if set(value) == {"min", "max"}
+            else str(next(iter(value.values())))
+        )
+    else:
+        body = str(value)
+    return f"{body} {anchor.unit}" if anchor.unit else body
 
-    四种特征各说一句：固定值（不许加限定词）／只给下限、只给上限（必须写那一族的词，可用词
-    逐字列出）／两端齐的区间（不许加单侧词）；再加并列多项那一种（记号自带，不用写）。单位永远
-    由记号带出，故另说一句。**后半句"检测时检测内容合不合这个特征"由
-    :func:`reportgen_worker.gate._adjacent_wording_violations` 执行，两边共用
-    :func:`reportgen_worker.gate.bound_expectation` 一份判定**——说的和拦的不会是两回事。
 
-    立案与形态变更史：原先渲染层把"不超过"一起渲出来、写手一律不许写边界词，结果成品叠字
-    （`全屋灯光颜色种类不能多于 不超过 3 种 种。`）。改成禁词表不管用——列了「不少于/不低于/
-    至少/不超过」，模型转头写了「不能多于」和「上限」，都不在表上；改成抽象说"自带边界说法"
-    也不管用，十二跑九跑复发。**根因是那句中文的语法主干正好落在洞里**：写手要说一个上界，
-    顺口的说法就是"最多 3 种"，我们却要求它写"…种类▢。"。故边界说法交还给句子，
-    而"这个空是什么"必须摆在空上——单位那一半正是这么给的，十二跑零复发。
+def _wording_note(anchor: ReportAnchor) -> list[str]:
+    """这个空要填什么、你写成什么样、读者会看到什么——**一行一件事**。
 
-    **反例仍然不进 prompt**（铁律一）：这里给的是"必须从这几个词里挑一个"的**正面清单**，
-    不是"不许写哪些词"。两者失败方向不同：正面清单漏一个词只多烧一轮重写，禁止清单漏一个词
-    缺陷就进成品。
+    形态是用户当晚两次订正出来的：①"在输入的地方给出需要填的值的特征"；②原来那一行
+    "信息很杂很乱、读不出是什么意思"——八种性质的东西挤在一行，而且前半行给的四样里有三样
+    随后都要求它别写（内部编号、题名、单位、原始 JSON）。现形态四行封顶：
+    **你写 / 读者看到 / 这是什么 /（撞词提醒）**。
+
+    "你写"与"读者看到"并排的用处不止是好读：**单位该不该写、写在哪儿，一对照就看见了**，
+    不用再讲"别写单位"那句话——而那句话讲了两版都没拦住（真跑 2/6 复发）。
     """
-    parts = []
-
-    def _choices(side: str) -> str:
-        return "、".join(f"「{root}」" for root in BOUND_ROOTS_BY_SIDE[side])
-
+    lines: list[str] = []
+    unit = f" {anchor.unit}" if anchor.unit else ""
     kind, side = bound_expectation(anchor)
+
     if not anchor.has_items:
+        token = f"{{{anchor.lkp_id}}}"
         if kind == BOUND_REQUIRED:
             assert side is not None
-            parts.append(
-                f"这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**，记号出来是裸的数（带单位）——"
-                f"句子里必须写清这是{BOUND_SIDE_NAME[side]}，从这几个词里挑一个放在记号前面："
-                f"{_choices(side)}"
-            )
+            word = BOUND_ROOTS_BY_SIDE[side][0]
+            others = "／".join(BOUND_ROOTS_BY_SIDE[side][1:3])
+            lines.append(f"  你写：…{word} {token}{unit}。")
+            lines.append(f"  读者看到：…{word} {_reader_sees(anchor, anchor.value)}。")
+            lines.append(f"  这是个{BOUND_SIDE_NAME[side]}，也可以用：{others}")
         elif isinstance(anchor.value, dict):
-            parts.append("这个空要填的是一个**两端都给了的范围**，写「在…到…之间」，别加单侧限定词")
+            lines.append(f"  你写：…做在 {token}{unit} 之间。")
+            lines.append(f"  读者看到：…做在 {_reader_sees(anchor, anchor.value)} 之间。")
+            lines.append("  这是个两端都给了的范围，前面别加单侧限定词")
         else:
-            parts.append(
-                "这个空要填的是一个**确定的数**，前面别加「不低于」「最多」这类限定词——"
-                "数据里没有那层意思，加了就是替它下一个它没给的判断"
-            )
+            lines.append(f"  你写：…就用 {token}{unit}。")
+            lines.append(f"  读者看到：…就用 {_reader_sees(anchor, anchor.value)}。")
+            lines.append("  这是个确定的数，前面别加「不低于」「最多」这类词")
     else:
-        # 分项落点：整条引用与按项引用是**两个不同的空**，特征也不同，必须分开说——
-        # 只说整条那一种，模型按项引用时会照着一句对不上的话写，然后被打回。
-        if kind == BOUND_CARRIED:
-            parts.append("整条引用时，记号会把每一项的边界说法一起带出来，你不用也不要再写")
-        else:
-            parts.append("整条引用时，各项都是给定的数值，前面别加「不低于」「最多」这类单侧限定词")
-        by_side: dict[str, list[str]] = {}
+        value = anchor.value if isinstance(anchor.value, dict) else {}
         for name in anchor.item_names:
             item_kind, item_side = bound_expectation(anchor, name)
-            if item_kind == BOUND_REQUIRED and item_side is not None:
-                by_side.setdefault(item_side, []).append(name)
-        for item_side, names in by_side.items():
-            tokens = "、".join(f"{{{anchor.lkp_id}.{n}}}" for n in names)
-            parts.append(
-                f"按项引用 {tokens} 时出的是裸的数，那一项**只给了"
-                f"{BOUND_SIDE_NAME[item_side]}**，句子里必须写清：{_choices(item_side)}"
+            need = (
+                f"（这一项只给了{BOUND_SIDE_NAME[item_side]}，记号前要写"
+                f"{BOUND_ROOTS_BY_SIDE[item_side][0]}这类词）"
+                if item_kind == BOUND_REQUIRED and item_side is not None
+                else ""
             )
+            token = f"{{{anchor.lkp_id}{REF_SEPARATOR}{name}}}"
+            seen = _reader_sees(anchor, value.get(name))
+            lines.append(f"  你写 {token}{unit} → 读者看到「{seen}」{need}")
+        lines.append(f"  整条写 {{{anchor.lkp_id}}}**不加单位** → 它会把这几项连单位一起并排出来")
+        if kind != BOUND_CARRIED:
+            lines.append("  各项都是确定的数，前面别加限定词")
 
-    if anchor.unit:
-        parts.append(f"单位「{anchor.unit}」由记号自己带出来，正文里不用也不要再写一遍")
     collision = BOUND_WORD_RE.search(anchor.name)
     if collision is not None:
-        parts.append(
-            f"这条的题名里带着「{collision.group(0)}」——题名是内部标签，照抄它未必对上这个空的"
-            "特征，按上面那条写"
-        )
-    return "\n  " + "；".join(parts)
+        lines.append(f"  （题名里的「{collision.group(0)}」是内部标签，照抄未必对，按上面写）")
+    return lines
 
 
 def _anchor_line(anchor: ReportAnchor) -> str:
@@ -254,17 +254,12 @@ def _anchor_line(anchor: ReportAnchor) -> str:
     把禁句写进指令，模型会照抄禁句本身（「得一起定」那轮 4/5 主张逐字带它）。禁止形态由
     :mod:`reportgen_worker.gate` 拦，prompt 只正面给它数据算出来的合法选择。
     """
-    tier = "【可作支点】" if anchor.presentation == THESIS_SUPPORT else "【未过门·建议口吻】"
-    head = (
-        f"- {anchor.lkp_id}（{anchor.name}，{anchor.unit or '无单位'}）"
-        f"= {json.dumps(anchor.value, ensure_ascii=False)}{tier}"
+    tier = (
+        "可作支点"
+        if anchor.presentation == THESIS_SUPPORT
+        else "没有外部依据，用「我们建议…」的口吻"
     )
-    tokens = item_tokens(anchor)
-    if tokens:
-        ref = f"\n  这条分 {len(tokens)} 项，各项的记号：" + "、".join(tokens)
-    else:
-        ref = f"\n  这条只有一个值，引用写 {{{anchor.lkp_id}}}"
-    return head + ref + _wording_note(anchor)
+    return "\n".join([f"- {anchor.name}｜{tier}", *_wording_note(anchor)])
 
 
 _CARD_INDEX_RE = re.compile(r"^card\[(\d+)\]\s*")

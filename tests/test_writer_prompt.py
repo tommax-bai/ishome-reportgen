@@ -42,9 +42,9 @@ def test_anchor_lines_carry_presentation_tier() -> None:
     """
     user = build_messages(request_for())[1]["content"]
     assert "lkp-counter-height" in user
-    assert "【未过门·建议口吻】" in user
-    assert "lkp-passage-main（主通道净宽，mm）" in user
-    assert "【可作支点】" in user
+    assert "没有外部依据，用「我们建议…」的口吻" in user
+    assert "- 主通道净宽｜可作支点" in user
+    assert "｜可作支点" in user
 
 
 def test_prompt_warns_that_anchor_names_carry_banned_words() -> None:
@@ -93,7 +93,7 @@ def test_rewrite_carries_the_previous_draft_with_violations_pinned_to_cards() ->
     request.previous_cards = [
         Card(
             thesis="主通道要走得开。",
-            body="留出 {lkp-passage-main} 就够两个人错身。",
+            body="留出 {lkp-passage-main} mm 就够两个人错身。",
             number_refs=[],
         ),
         Card(thesis="台面按人定。", body="切菜时手腕是平的。", number_refs=[]),
@@ -130,15 +130,16 @@ def test_slot_says_what_kind_of_value_goes_in_it() -> None:
     """
     system, user = (m["content"] for m in build_messages(request_for()))
     assert "每条落点下面写着这个空要填的值是什么特征" in system
-    # 只给下限（主通道净宽 = {min: 900}）：必须写、可用词逐字列出、最顺的排头一个
-    assert "这个空要填的值**只给了下限**" in user
-    assert "「不低于」、「至少」" in user
+    # 只给下限（主通道净宽 = {min: 900}）：你写什么、读者看到什么，并排给
+    assert "你写：…不低于 {lkp-passage-main} mm。" in user
+    assert "读者看到：…不低于 900 mm。" in user
+    assert "这是个下限，也可以用：至少／不少于" in user
     # 固定值（衣柜挂杆高 = 2136）：不许加限定词
-    assert "这个空要填的是一个**确定的数**" in user
+    assert "你写：…就用 {lkp-wardrobe-rod} mm。" in user
+    assert "读者看到：…就用 2136 mm。" in user
+    assert "这是个确定的数，前面别加「不低于」「最多」这类词" in user
     # 两端都给了的范围（橱柜台面高 = {min,max}）
-    assert "这个空要填的是一个**两端都给了的范围**" in user
-    # 单位一律由记号带出（这一半没变，是另一条裁决）
-    assert "单位「mm」由记号自己带出来" in user
+    assert "读者看到：…做在 900–950 mm 之间。" in user
 
 
 def test_multi_item_anchor_describes_both_ways_of_referencing_it() -> None:
@@ -167,9 +168,9 @@ def test_multi_item_anchor_describes_both_ways_of_referencing_it() -> None:
     request = request_for()
     request.anchors = ReportDataPackage.model_validate(raw).domain_anchors(DOMAIN)
     user = build_messages(request)[1]["content"]
-    assert "整条引用时，记号会把每一项的边界说法一起带出来" in user
-    assert "按项引用 {lkp-shower-clear.width}、{lkp-shower-clear.depth} 时出的是裸的数" in user
-    assert "那一项**只给了下限**" in user
+    assert "你写 {lkp-shower-clear.width} mm → 读者看到「800 mm」" in user
+    assert "（这一项只给了下限，记号前要写不低于这类词）" in user
+    assert "整条写 {lkp-shower-clear}**不加单位** → 它会把这几项连单位一起并排出来" in user
 
 
 def test_slot_note_flags_a_bound_word_hiding_in_the_anchor_name() -> None:
@@ -199,8 +200,9 @@ def test_slot_note_flags_a_bound_word_hiding_in_the_anchor_name() -> None:
     request = request_for()
     request.anchors = package.domain_anchors(DOMAIN)
     user = build_messages(request)[1]["content"]
-    assert "这个空要填的值**只给了上限**" in user
-    assert "这条的题名里带着「上限」" in user
+    assert "你写：…不超过 {lkp-cct-variety-max} 种。" in user
+    assert "读者看到：…不超过 3 种。" in user
+    assert "（题名里的「上限」是内部标签，照抄未必对，按上面写）" in user
 
 
 def test_unbacked_anchor_enters_prompt() -> None:
@@ -211,7 +213,7 @@ def test_unbacked_anchor_enters_prompt() -> None:
     """
     user = build_messages(request_for())[1]["content"]
     assert "lkp-wardrobe-rod" in user
-    assert "【未过门·建议口吻】" in user
+    assert "没有外部依据，用「我们建议…」的口吻" in user
 
 
 def test_assertion_budget_split_in_prompt() -> None:
@@ -327,18 +329,16 @@ def test_multi_item_anchor_lists_every_legal_token() -> None:
     """
     user = build_messages(request_for("lighting"))[1]["content"]
 
-    assert (
-        "这条分 2 项，各项的记号："
-        "{lkp-illuminance-living.general}、{lkp-illuminance-living.reading}"
-    ) in user
+    assert "你写 {lkp-illuminance-living.general} lx → 读者看到「100 lx」" in user
+    assert "你写 {lkp-illuminance-living.reading} lx → 读者看到「300 lx」" in user
 
 
 def test_single_valued_anchor_says_reference_the_whole_thing() -> None:
     """只有一个匿名项的落点：正面告诉它整条引用就行，不摆"不要写 X"那种反例。"""
     user = build_messages(request_for())[1]["content"]
 
-    assert "这条只有一个值，引用写 {lkp-counter-height}" in user
-    assert "这条只有一个值，引用写 {lkp-wardrobe-rod}" in user
+    assert "你写：…做在 {lkp-counter-height} mm 之间。" in user
+    assert "你写：…就用 {lkp-wardrobe-rod} mm。" in user
 
 
 def test_forbidden_reference_forms_stay_out_of_the_prompt() -> None:

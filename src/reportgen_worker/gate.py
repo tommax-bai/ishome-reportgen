@@ -552,11 +552,25 @@ def _adjacent_wording_violations(
                 f"{label} 「{cite(clause)}{token}」{why} → 删掉「{written.group(0)}」",
             )
 
-        if unit and text[match.end() :].lstrip(" \u3000\t").startswith(unit):
-            _add(
-                "gate-unit-after-ref",
-                f"{label} 「{token} {unit}」单位由记号带出 → 删掉记号后的「{unit}」",
-            )
+        # 单位：**单值场合必须由句子写**（用户裁决 2026-08-30 晚），写的是我们逐字下发的那个字，
+        # 机检逐字比对这条落点的 unit——单位仍由数据决定，写手只是搬运，编不出奇怪单位。
+        # 并列场合相反：那里单位由渲染层逐项带，句子写了就是叠字（同边界说法的分法）。
+        if unit:
+            tail = text[match.end() :].lstrip(" \u3000\t")
+            # 单值还是并列，看的是**这个记号渲出几个值**（按项引用、或整条引用一个匿名项＝单值），
+            # 不看边界那一档——分场景落点整条引用时各项是确定的数（不带边界说法），
+            # 但它仍是并列，单位由渲染层逐项带。
+            if anchor.has_items and match.group(2) is None:
+                if tail.startswith(unit):
+                    _add(
+                        "gate-unit-after-ref",
+                        f"{label} 「{token} {unit}」记号并列多项、自带各项单位 → 删掉「{unit}」",
+                    )
+            elif not tail.startswith(unit):
+                _add(
+                    "gate-unit-missing",
+                    f"{label} 「{cite(clause)}{token}」记号后缺单位 → 补成「{token} {unit}」",
+                )
     return violations
 
 
@@ -570,6 +584,27 @@ def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]
     v2.8 加两条同路的（值的两层模型）：``value`` 形态与 ``value_kind`` 对不上、项名不合命名空间。
     """
     violations: list[Violation] = []
+    banned = collect_banned_terms(domain, package)
+    for anchor in package.domain_anchors(domain):
+        # 单位撞禁词（2026-08-30 晚立案，读者可见）：单位自本轮起**由写手写在记号后面**，
+        # 而写手写禁词必被打回——数据里放一个"要求写、写了就违规"的单位，等于给它一条死路
+        # （坑单第 19 条：照做不得到就不是打回）。
+        #
+        # 更早的那个洞由这一条一并堵住：**禁词检查跑在替换之前的文本上**，渲染层再把数据里的
+        # 词面替进去——`×环境照度` 含本域禁词「照度」，而它逐字印在了已出的成品里
+        # （`亮出 3–5 ×环境照度`）。禁词从数据侧绕过了机检。拦在这里是唯一堵得住的地方：
+        # 渲染层不认识禁词表，册级检查看不到渲染结果。**改源不是改判据**（规则 4.19）。
+        for term in banned:
+            if anchor.unit and term in anchor.unit:
+                violations.append(
+                    Violation(
+                        check="gate-unit-collides-banned-term",
+                        detail=(
+                            f"{anchor.lkp_id} 单位「{anchor.unit}」含本域禁词「{term}」 → "
+                            "改源换一个能写给业主看的单位"
+                        ),
+                    )
+                )
     for anchor in package.anchors:
         shape = _value_shape_violation(anchor)
         if shape is not None:

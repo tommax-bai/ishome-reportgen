@@ -32,7 +32,7 @@ PACKAGE = load_package()
 
 GOOD_CARD = Card(
     thesis="操作台的高度要跟着主厨的身体走。",
-    body="台面高按 {lkp-counter-height} 做。",
+    body="台面高按 {lkp-counter-height} mm 做。",
     number_refs=["lkp-counter-height"],
 )
 BAD_CARD = Card(thesis="台面高做九百。", body="就是 900mm，综合考量后定的。", number_refs=[])
@@ -254,7 +254,7 @@ async def test_book_check_accepts_unbacked_reference_with_annotation() -> None:
         cards=[
             Card(
                 thesis="挂杆按你的身高定。",
-                body="定在 {lkp-wardrobe-rod}。",
+                body="定在 {lkp-wardrobe-rod} mm。",
                 number_refs=["lkp-wardrobe-rod"],
             )
         ],
@@ -539,8 +539,8 @@ async def test_calibrated_anchor_needs_no_annotation() -> None:
 ITEM_CARD = Card(
     thesis="沙发旁读书那块得比平时亮。",
     body=(
-        "客厅平时待着按 {lkp-illuminance-living.general} 就够，"
-        "沙发旁读书那块单独提到 {lkp-illuminance-living.reading}。"
+        "客厅平时待着按 {lkp-illuminance-living.general} lx 就够，"
+        "沙发旁读书那块单独提到 {lkp-illuminance-living.reading} lx。"
     ),
     number_refs=["lkp-illuminance-living.general", "lkp-illuminance-living.reading"],
 )

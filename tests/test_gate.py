@@ -63,7 +63,7 @@ def package_with_anchor(
 def test_clean_card_passes() -> None:
     card = Card(
         thesis="操作台的高度要跟着主厨的身体走。",
-        body="台面高按 {lkp-counter-height} 做，弯腰和架肩都不会发生。",
+        body="台面高按 {lkp-counter-height} mm 做，弯腰和架肩都不会发生。",
         number_refs=["lkp-counter-height"],
     )
     assert run_unit_gate([card], "ergonomics", PACKAGE) == []
@@ -83,7 +83,7 @@ def test_thesis_body_duplicate_only_when_verbatim() -> None:
     """只判逐字相同：不做相似度、不设阈值（阈值无数据依据，同"卡片数上限 6~8"被撤回的理由）。"""
     card = Card(
         thesis="台面高按主厨的身体定。",
-        body="台面高按主厨的身体定：{lkp-counter-height} 这个区间，切菜时手腕不会架起来。",
+        body="台面高按主厨的身体定：{lkp-counter-height} mm 这个区间，切菜时手腕不会架起来。",
         number_refs=["lkp-counter-height"],
     )
     assert run_unit_gate([card], "ergonomics", PACKAGE) == []
@@ -119,7 +119,7 @@ def test_cross_domain_ref_rejected() -> None:
     """单元只见本域落点（图 v0.2 §2）：ergonomics 单元引用 lighting 落点即违规。"""
     card = Card(
         thesis="顺便说照度。",
-        body="起居室 {lkp-illuminance-living} 即可。",
+        body="起居室 {lkp-illuminance-living} lx 即可。",
         number_refs=["lkp-illuminance-living"],
     )
     assert "gate-number-ref-unresolved" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
@@ -151,7 +151,7 @@ def test_release_pattern_runs_on_raw_text_with_placeholders() -> None:
     package = ReportDataPackage.model_validate(tainted)
     card = Card(
         thesis="主通道要走得开。",
-        body="主通道留出不少于 {lkp-passage-main} 的空间。",
+        body="主通道留出不少于 {lkp-passage-main} mm 的空间。",
         number_refs=["lkp-passage-main"],
     )
     assert "cr-bound-word-before-placeholder" in checks_of(
@@ -185,7 +185,7 @@ def test_bound_word_required_when_the_value_gives_one_side_only() -> None:
     package = package_with_anchor("range", {"max": 3}, "lkp-probe", unit="种")
     card = Card(
         thesis="全屋灯光颜色种类得收着点。",
-        body="颜色种类控制在 {lkp-probe}，家里才不显得零碎。",
+        body="颜色种类控制在 {lkp-probe} mm，家里才不显得零碎。",
         number_refs=["lkp-probe"],
     )
     violations = run_unit_gate([card], "ergonomics", package)
@@ -201,14 +201,14 @@ def test_bound_word_direction_must_match_the_side() -> None:
     package = package_with_anchor("range", {"min": 90}, "lkp-probe", unit="Ra")
     wrong = Card(
         thesis="显色能力要够。",
-        body="显色指数不超过 {lkp-probe} 才还原得准。",
+        body="显色指数不超过 {lkp-probe} mm 才还原得准。",
         number_refs=["lkp-probe"],
     )
     assert "gate-bound-word-direction" in checks_of(run_unit_gate([wrong], "ergonomics", package))
     for phrasing in ("显色指数不低于 ", "显色指数低于 ", "显色指数至少 "):
         ok = Card(
             thesis="显色能力要够。",
-            body=f"{phrasing}{{lkp-probe}}，衣服的颜色才不发闷。",
+            body=f"{phrasing}{{lkp-probe}} Ra，衣服的颜色才不发闷。",
             number_refs=["lkp-probe"],
         )
         assert not [
@@ -226,7 +226,7 @@ def test_bound_word_forbidden_on_a_fixed_value() -> None:
     """
     card = Card(
         thesis="挂杆高度按人定。",
-        body="挂杆不低于 {lkp-wardrobe-rod} 就够得着。",
+        body="挂杆不低于 {lkp-wardrobe-rod} mm 就够得着。",
         number_refs=["lkp-wardrobe-rod"],
     )
     violations = run_unit_gate([card], "ergonomics", PACKAGE)
@@ -241,7 +241,7 @@ def test_bound_word_forbidden_when_one_token_lists_several_items() -> None:
     )
     card = Card(
         thesis="淋浴区要站得开。",
-        body="淋浴区不低于 {lkp-probe} 才转得开身。",
+        body="淋浴区不低于 {lkp-probe} mm 才转得开身。",
         number_refs=["lkp-probe"],
     )
     hit = [
@@ -252,12 +252,14 @@ def test_bound_word_forbidden_when_one_token_lists_several_items() -> None:
     assert hit and "记号并列多项" in hit[0].detail
 
 
-def test_the_filed_sentence_now_fails_only_on_the_unit() -> None:
-    """立案那句话在新形态下的判法（记录形态变更本身）。
+def test_the_filed_sentence_is_now_the_correct_sentence() -> None:
+    """立案那句话，现在**整句都合法**——这条测试记的是形态变更本身。
 
-    真跑成品逐字：`全屋灯光颜色种类不能多于 不超过 3 种 种。` 现在渲染层只出「3 种」，
-    于是**「不能多于」变成合法**（方向对），只剩单位那一遍是叠的——单位仍由记号带出，
-    因为写错单位会改掉这个数的大小，而写错边界词不会。
+    当日上午的成品逐字：`全屋灯光颜色种类不能多于 不超过 3 种 种。`（边界词与单位各叠一次）。
+    模型写的是 `不能多于 {记号} 种`，而当时渲染层把边界说法与单位一起渲了出来，于是重复。
+
+    两轮裁决之后，渲染层只出数，边界说法与单位都归句子：**模型当初写的那一句，逐字就是现在
+    要求的写法**。机器改成了顺着它的本能，而不是继续跟它的本能较劲。
     """
     package = package_with_anchor("range", {"max": 3}, "lkp-cct-variety-max", unit="种")
     card = Card(
@@ -265,10 +267,11 @@ def test_the_filed_sentence_now_fails_only_on_the_unit() -> None:
         body="颜色一散，家就显得零碎了。",
         number_refs=["lkp-cct-variety-max"],
     )
-    checks = checks_of(run_unit_gate([card], "ergonomics", package))
-    assert "gate-unit-after-ref" in checks
-    assert "gate-bound-word-missing" not in checks
-    assert "gate-bound-word-direction" not in checks
+    assert not [
+        v
+        for v in run_unit_gate([card], "ergonomics", package)
+        if v.check.startswith(("gate-bound-word", "gate-unit"))
+    ]
 
 
 def test_bound_word_in_another_clause_is_not_a_hit() -> None:
@@ -278,7 +281,7 @@ def test_bound_word_in_another_clause_is_not_a_hit() -> None:
     """
     card = Card(
         thesis="挂杆高度按人定。",
-        body="别的地方不低于什么先不谈，挂杆按 {lkp-wardrobe-rod} 装就够得着。",
+        body="别的地方不低于什么先不谈，挂杆按 {lkp-wardrobe-rod} mm 装就够得着。",
         number_refs=["lkp-wardrobe-rod"],
     )
     assert "gate-bound-word-before-ref" not in checks_of(
@@ -286,14 +289,25 @@ def test_bound_word_in_another_clause_is_not_a_hit() -> None:
     )
 
 
-def test_unit_after_ref_hits_regardless_of_value_shape() -> None:
-    """单位那一条与值形态无关：分项落点整条引用、单项引用，渲出来都逐项带单位。"""
-    card = Card(
+def test_unit_belongs_to_the_sentence_only_when_the_token_renders_one_value() -> None:
+    """单位归谁，看**这个记号渲出几个值**——与边界说法同一条分界（句子够不够得着）。
+
+    按项引用只渲一个值 → 句子够得着 → 单位必须由句子写；整条引用一个分项落点渲的是并列
+    （`一般活动 100 lx、阅读 300 lx`），句子够不着里面每一项 → 单位由渲染层逐项带，写了就是叠。
+    """
+    single = Card(
         thesis="起居室分场合给光。",
-        body="沙发读书那块按 {lkp-illuminance-living.reading} lx 做。",
+        body="沙发读书那块按 {lkp-illuminance-living.reading} 做。",
         number_refs=["lkp-illuminance-living.reading"],
     )
-    assert "gate-unit-after-ref" in checks_of(run_unit_gate([card], "lighting", PACKAGE))
+    assert "gate-unit-missing" in checks_of(run_unit_gate([single], "lighting", PACKAGE))
+
+    listed = Card(
+        thesis="起居室分场合给光。",
+        body="起居室按 {lkp-illuminance-living} lx 来。",
+        number_refs=["lkp-illuminance-living"],
+    )
+    assert "gate-unit-after-ref" in checks_of(run_unit_gate([listed], "lighting", PACKAGE))
 
 
 def test_release_check_pattern_executed() -> None:
@@ -315,7 +329,7 @@ def test_unbacked_anchor_may_enter_thesis() -> None:
     未过门的建议根本进不了主旨句——也就进不了业主眼里，转正需要的行为信号无从产生。
     """
     in_thesis = Card(
-        thesis="台面就该做到 {lkp-counter-height}。",
+        thesis="台面就该做到 {lkp-counter-height} mm。",
         body="这样你切菜时手腕是平的。",
         number_refs=["lkp-counter-height"],
     )
@@ -325,7 +339,7 @@ def test_unbacked_anchor_may_enter_thesis() -> None:
 def test_thesis_on_calibrated_anchor_passes() -> None:
     """过门落点照常作支点——门禁只拦未背书的，不误伤有背书的。"""
     card = Card(
-        thesis="这条主通道必须至少留出 {lkp-passage-main}。",
+        thesis="这条主通道必须至少留出 {lkp-passage-main} mm。",
         body="端着汤走过去不用侧身。",
         number_refs=["lkp-passage-main"],
         assertions=["通道净宽是否够"],
@@ -348,7 +362,7 @@ def test_assertion_declared_but_unbacked_rejected() -> None:
     """requires 降档 → 该谓词不得被声明使用（规则 4.10a 经验条目不进断言预算）。"""
     degraded_require = Card(
         thesis="操作台高度这样定就对了。",
-        body="参考范围见 {lkp-counter-height}。",
+        body="参考范围见 {lkp-counter-height} mm。",
         number_refs=["lkp-counter-height"],
         assertions=["台面高度"],
     )
@@ -382,7 +396,7 @@ def test_unbacked_anchor_is_referenceable() -> None:
     """曾被隐藏的点值落点现在照常可引用（v2.4）：它只是语域受限，不是不存在。"""
     card = Card(
         thesis="挂杆按你的身高定。",
-        body="定在 {lkp-wardrobe-rod} 这个高度。",
+        body="定在 {lkp-wardrobe-rod} mm 这个高度。",
         number_refs=["lkp-wardrobe-rod"],
     )
     assert run_unit_gate([card], "ergonomics", PACKAGE) == []
@@ -407,7 +421,7 @@ def test_bare_lkp_identifier_leak_rejected() -> None:
 
     placeholder_form = Card(
         thesis="操作台的高度要跟着主厨的身体走。",
-        body="参考范围 {lkp-counter-height}。",
+        body="参考范围 {lkp-counter-height} mm。",
         number_refs=["lkp-counter-height"],
     )
     assert "gate-lkp-identifier-leak" not in checks_of(
@@ -432,7 +446,7 @@ def test_chinese_words_containing_numerals_pass() -> None:
     """量词判据不误伤日常词：一般/一起/十分/百般 里的数字字都不跟量词。"""
     ordinary = Card(
         thesis="操作台的高度要跟着主厨的身体走。",
-        body="一般活动时你会一起进出，十分顺手，台面按 {lkp-counter-height} 做。",
+        body="一般活动时你会一起进出，十分顺手，台面按 {lkp-counter-height} mm 做。",
         number_refs=["lkp-counter-height"],
     )
     assert "gate-chinese-numeral" not in checks_of(run_unit_gate([ordinary], "ergonomics", PACKAGE))
@@ -459,7 +473,7 @@ def test_chinese_numeral_still_not_false_positive() -> None:
     """收宽形态后仍不许误伤日常词。"""
     ordinary = Card(
         thesis="操作台的高度要跟着主厨的身体走。",
-        body="一般活动时你会一起进出，十分顺手，台面按 {lkp-counter-height} 做。",
+        body="一般活动时你会一起进出，十分顺手，台面按 {lkp-counter-height} mm 做。",
         number_refs=["lkp-counter-height"],
     )
     assert "gate-chinese-numeral" not in checks_of(run_unit_gate([ordinary], "ergonomics", PACKAGE))
@@ -572,12 +586,12 @@ def test_provenance_notes_cover_only_referenced_anchors() -> None:
     """标注跟着**引用**走，不是把包里所有未过门落点都堆到页脚——没提到的数不需要标。"""
     referenced = Card(
         thesis="操作台高度跟着主厨的身体走。",
-        body="台面高按 {lkp-counter-height} 做。",
+        body="台面高按 {lkp-counter-height} mm 做。",
         number_refs=["lkp-counter-height"],
     )
     untouched = Card(
         thesis="主通道要留得开。",
-        body="净宽按 {lkp-passage-main} 走。",
+        body="净宽按 {lkp-passage-main} mm 走。",
         number_refs=["lkp-passage-main"],
     )
 
@@ -591,7 +605,7 @@ def test_provenance_note_carries_source_and_calibration_verbatim() -> None:
     """标注是**投影**不是生成：来源与状态逐字取自包内，成文线不拼接、不补空、不改写。"""
     card = Card(
         thesis="操作台高度跟着主厨的身体走。",
-        body="台面高按 {lkp-counter-height} 做。",
+        body="台面高按 {lkp-counter-height} mm 做。",
         number_refs=["lkp-counter-height"],
     )
     note = required_provenance_notes([card], "ergonomics", PACKAGE)[0]
@@ -667,7 +681,7 @@ def test_single_item_reference_passes_for_every_multi_item_kind(
     package = package_with_anchor(kind, value)
     card = Card(
         thesis="这一块单独说。",
-        body=f"这块按 {{lkp-probe.{item}}} 来，别跟着大面积一起走。",
+        body=f"这块按 {{lkp-probe.{item}}} mm 来，别跟着大面积一起走。",
         number_refs=[f"lkp-probe.{item}"],
     )
 
@@ -682,7 +696,7 @@ def test_whole_anchor_reference_still_passes_for_multi_item_anchor() -> None:
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="起居室的亮度分层来看。",
-        body="这一片整体按 {lkp-probe} 走。",
+        body="这一片整体按 {lkp-probe} 走。",  # 并列场合：单位由渲染层逐项带，句子不写
         number_refs=["lkp-probe"],
     )
 
@@ -697,7 +711,7 @@ def test_unknown_item_rejected_with_the_real_items_listed_verbatim() -> None:
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="书桌那块要单独加亮。",
-        body="书桌上按 {lkp-probe.task} 做。",
+        body="书桌上按 {lkp-probe.task} mm 做。",
         number_refs=["lkp-probe.task"],
     )
 
@@ -743,7 +757,7 @@ def test_number_refs_are_declared_at_token_granularity() -> None:
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="这一片分开两种用法看。",
-        body="平时按 {lkp-probe.general}，沙发旁读书那块按 {lkp-probe.reading}。",
+        body="平时按 {lkp-probe.general} mm，沙发旁读书那块按 {lkp-probe.reading} mm。",
         number_refs=["lkp-probe.general", "lkp-probe.reading"],
     )
 
@@ -755,7 +769,7 @@ def test_declaring_the_anchor_while_writing_an_item_is_a_granularity_violation()
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="沙发旁那块单独加亮。",
-        body="读书那块按 {lkp-probe.reading} 来。",
+        body="读书那块按 {lkp-probe.reading} mm 来。",
         number_refs=["lkp-probe"],
     )
 
@@ -773,7 +787,7 @@ def test_declaring_one_item_and_writing_another_is_still_fake_confession() -> No
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="这一片按平时的用法定。",
-        body="整片按 {lkp-probe.general} 走，读书那档这轮给不出。",
+        body="整片按 {lkp-probe.general} mm 走，读书那档这轮给不出。",
         number_refs=["lkp-probe.general", "lkp-probe.reading"],
     )
 
@@ -814,7 +828,7 @@ def test_item_name_leaking_into_the_body_is_rejected() -> None:
     package = package_with_anchor("scenario", {"general": 100, "reading": 300})
     card = Card(
         thesis="这一片分两种用法。",
-        body="general 那一档按 {lkp-probe.general} 走。",
+        body="general 那一档按 {lkp-probe.general} mm 走。",
         number_refs=["lkp-probe.general"],
     )
 
@@ -831,7 +845,7 @@ def test_item_name_leak_check_does_not_over_block() -> None:
     package = package_with_anchor("tier", {"low": 8, "medium": 12, "high": 18})
     card = Card(
         thesis="玻璃与档位这一段。",
-        body="窗上用 low-E 玻璃，柜子按 {lkp-probe.medium} 这一档配。",
+        body="窗上用 low-E 玻璃，柜子按 {lkp-probe.medium} mm 这一档配。",
         number_refs=["lkp-probe.medium"],
     )
 
