@@ -158,13 +158,15 @@ def _triggered_rule(
     *, content: str, rationale: str | None, feature: str | None, evidence: str | None
 ) -> TriggeredRule:
     return TriggeredRule(
-        assetId="rule-practice-storage-balcony-cleaning",
+        # 字段名用 snake_case：包侧模型 populate_by_name=True 两种都收，但 camelCase 过不了
+        # mypy（别名生成器对静态检查不可见）——上一提交把 mypy 门带红了，这里一并订正
+        asset_id="rule-practice-storage-balcony-cleaning",
         layer="tier-practice",
         content=content,
         rationale=rationale,
         severity="recommended",
         calibration="draft",
-        triggeredBy=TriggerEvidence(
+        triggered_by=TriggerEvidence(
             type="layout_feature" if feature else "always", feature=feature, evidence=evidence
         ),
     )
@@ -246,3 +248,85 @@ def test_paraphrased_claim_passes() -> None:
     )
 
     assert parse_claims(raw, set(), (), (BALCONY_RULE,))[0].claim.startswith("你家阳台")
+
+
+# ---------------------------------------------------------------------------
+# 两层模型（规则 1.9，v2.8）：项名进推导入参，值仍然不进
+# ---------------------------------------------------------------------------
+
+
+def test_derive_prompt_shows_item_names_but_still_no_values() -> None:
+    """推导要知道一条落点**分了几项**，因为"分场景讲"正是这一步该决定的事。
+
+    用户裁决原话："我觉得是需要的，因为卧室的灯光和客厅的灯光肯定会不一样"。
+    项名与名字/量纲同类（标签不是数），故"看不见值"这条不破——拿着 general/reading
+    依然产不出任何一个数字。
+    """
+    user = build_derive_messages(request_for("lighting"))[1]["content"]
+
+    assert "（分 2 项：general、reading——项名是内部记号，主张里说人话）" in user
+    assert "100" not in user  # 值一个都不能出现
+    assert "300" not in user
+
+
+def test_derive_prompt_leaves_the_split_decision_to_the_derivation() -> None:
+    """拆不拆由推导定：对这家人真是两回事就分两条主张，是一回事就一条带着。"""
+    system = build_derive_messages(request_for("lighting"))[0]["content"]
+
+    assert "这几项是分开讲还是合起来讲**由你定**" in system
+
+
+def test_single_valued_anchor_line_has_no_item_note() -> None:
+    """只有一个匿名项的落点不加分项尾巴——没有项可拆，多一句只会诱它去拆。"""
+    user = build_derive_messages(request_for())[1]["content"]
+
+    assert "lkp-counter-height（橱柜台面高，mm）\n" in user + "\n"
+
+
+def test_parse_rejects_item_names_copied_into_claims() -> None:
+    """项名逐字进主张＝内部记号会跟着进写作 prompt、再进卡片（同禁词/条目照抄那条路径）。
+
+    prompt 里叮嘱压不住已实测三次，故这一道也是**确定性校验**。
+    """
+    raw = json.dumps(
+        [{"claim": "起居室的 general 照明和 reading 那档要分开定", "anchors": []}],
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(DeriverOutputError, match="分项记号"):
+        parse_claims(raw, set(), (), (), ("general", "reading"))
+
+
+def test_claim_saying_the_scene_in_plain_words_passes() -> None:
+    """判的是照抄记号不是"讲这一项"：换成人话照放。"""
+    raw = json.dumps(
+        [{"claim": "客厅平时待着和沙发旁读书是两回事，亮度得分开定", "anchors": []}],
+        ensure_ascii=False,
+    )
+
+    assert parse_claims(raw, set(), (), (), ("general", "reading"))
+
+
+def test_always_rules_are_downweighted_against_this_household() -> None:
+    """两档权重不同：户型条目必讲，通行做法可讲。
+
+    真库实测 always 类 7 条且分布不均（照明 3／用材 2／造价 1／收纳 1）——一律"必须讲到"
+    等于给收敛最差的那一章再压三个通用话题，而"通用专业建议"正是获客线要摆脱的东西。
+    """
+    always_rule = _triggered_rule(
+        content="全屋色温种类不超过三种",
+        rationale="色温杂了整屋就不像一个作品",
+        feature=None,
+        evidence=None,
+    )
+    request = request_for().model_copy(update={"triggered_rules": [BALCONY_RULE, always_rule]})
+
+    system, user = (m["content"] for m in build_derive_messages(request))
+
+    assert "这套户型触发的条目（**必须讲到**" in user
+    assert "通行做法条目（**可以讲到**" in user
+    assert "别为它挤掉这一户的事" in system
+    # 分组正确：户型条目带依据、通行条目不带
+    household_block = user.split("通行做法条目")[0]
+    assert "阳台留清洁工具位（含插座）" in household_block
+    assert "全屋色温种类不超过三种" not in household_block

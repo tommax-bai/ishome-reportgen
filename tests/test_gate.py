@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import copy
+from typing import Any
+
+import pytest
 
 from reportgen_worker.gate import (
     annotation_required_anchors,
@@ -22,6 +25,39 @@ PACKAGE = load_package()
 
 def checks_of(violations: list) -> set[str]:  # type: ignore[type-arg]
     return {v.check for v in violations}
+
+
+def package_with_anchor(
+    value_kind: str, value: Any, lkp_id: str = "lkp-probe"
+) -> ReportDataPackage:
+    """在 ergonomics 域塞一条指定 valueKind 的落点——七类值构成各自的引用合法性都要能单测到。
+
+    值构成是**契约字段不是可推断项**，故夹具里逐类写死（同生产方的下发形态），不由代码猜。
+    """
+    raw = copy.deepcopy(PACKAGE_JSON)
+    raw["anchors"].append(
+        {
+            "lkpId": lkp_id,
+            "name": "测试落点",
+            "numberClass": "analysis",
+            "unit": "mm",
+            "valueKind": value_kind,
+            "value": value,
+            "basisTag": "ergonomics@v1",
+            "source": "行业通行",
+            "calibration": "calibrated",
+            "degraded": False,
+            "provenance": {
+                "source": "行业通行",
+                "effectiveFrom": None,
+                "effectiveTo": None,
+                "calibration": "calibrated",
+                "annotationRequired": False,
+            },
+            "presentation": "THESIS_SUPPORT",
+        }
+    )
+    return ReportDataPackage.model_validate(raw)
 
 
 def test_clean_card_passes() -> None:
@@ -325,8 +361,8 @@ def test_chinese_numeral_case_matrix() -> None:
 def test_range_split_reference_gets_contract_hint() -> None:
     """真跑形态：模型想分引用区间两端，自造 {lkp-x-min}/{lkp-x-max}。
 
-    打回理由必须讲清渲染契约（一个占位符=整条落点），否则它只会换个名字再造一次；
-    拆 min/max 会丢掉另一端，而上下限往往各管一条纪律。
+    v2.8 起打回理由不再说"一个占位符＝整条落点"——那条实现层契约的理由只对区间成立，
+    已由两层模型承接：区间落点**只有一个匿名项**，故整条引用即可；min/max 是值形态不是项。
     """
     card = Card(
         thesis="台面高度定在这个范围。",
@@ -339,7 +375,8 @@ def test_range_split_reference_gets_contract_hint() -> None:
         if v.check == "gate-number-ref-unresolved"
     ]
     assert violations
-    assert "占位符代表整条落点" in violations[0].detail
+    assert "只有一个值" in violations[0].detail
+    assert "丢掉另一端" in violations[0].detail
     assert "{lkp-counter-height}" in violations[0].detail
 
 
@@ -458,3 +495,265 @@ def test_package_gate_accepts_expired_but_flagged_anchor() -> None:
         "lkp-passage-main",
         "lkp-wardrobe-rod",
     }
+
+
+# ---------------------------------------------------------------------------
+# 两层模型（规则 1.9，v2.8）：一条落点＝若干项，一项的值＝一个数或一个区间
+# ---------------------------------------------------------------------------
+
+MULTI_ITEM_ANCHORS = [
+    ("scenario", {"general": 100, "reading": 300}, "reading"),
+    ("tier", {"low": 8, "medium": 12, "high": 18}, "medium"),
+    ("dimension", {"depth": 600, "width": 900, "height": 2000}, "depth"),
+    (
+        "component",
+        {
+            "main-material": {"min": 0.2, "max": 0.35},
+            "demolition": {"min": 0.05, "max": 0.1},
+        },
+        "main-material",
+    ),
+    ("comparison", {"high-vs-medium": {"min": 1.4, "max": 1.8}}, "high-vs-medium"),
+]
+
+
+@pytest.mark.parametrize(("kind", "value", "item"), MULTI_ITEM_ANCHORS)
+def test_single_item_reference_passes_for_every_multi_item_kind(
+    kind: str, value: Any, item: str
+) -> None:
+    """五类分项落点都能引用**其中一项**——本轮裁决要解决的那件事。
+
+    立案证据：灯光域同包同码同参六轮 0/6 过检，六轮全部 27 种越界占位符 27/27 逐字等于
+    「真实落点 id」＋「该落点 value 里一个真实的键」——模型不是不守规矩，是想说的那句话
+    （"沙发旁读书那块要单独加亮"）没有合法写法。
+    """
+    package = package_with_anchor(kind, value)
+    card = Card(
+        thesis="这一块单独说。",
+        body=f"这块按 {{lkp-probe.{item}}} 来，别跟着大面积一起走。",
+        number_refs=[f"lkp-probe.{item}"],
+    )
+
+    assert run_unit_gate([card], "ergonomics", package) == []
+
+
+def test_whole_anchor_reference_still_passes_for_multi_item_anchor() -> None:
+    """整条引用**没有被取消**：裁决加的是"可以引其中一项"，不是"必须逐项引"。
+
+    这一步不替裁决收窄——分项落点整条渲染成什么样是渲染层的题目，不是引用合法性的题目。
+    """
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="起居室的亮度分层来看。",
+        body="这一片整体按 {lkp-probe} 走。",
+        number_refs=["lkp-probe"],
+    )
+
+    assert run_unit_gate([card], "ergonomics", package) == []
+
+
+def test_unknown_item_rejected_with_the_real_items_listed_verbatim() -> None:
+    """项不存在即违规，且打回提示**逐字列出这条落点有哪几项**。
+
+    这是本轮最要紧的一条：旧提示连吃三稿的原因不是模型不听话，是它没被告知有哪些合法选择。
+    """
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="书桌那块要单独加亮。",
+        body="书桌上按 {lkp-probe.task} 做。",
+        number_refs=["lkp-probe.task"],
+    )
+
+    violations = [
+        v
+        for v in run_unit_gate([card], "ergonomics", package)
+        if v.check == "gate-number-ref-unresolved"
+    ]
+
+    assert len(violations) == 1
+    assert "没有「task」这一项" in violations[0].detail
+    assert "{lkp-probe.general}" in violations[0].detail  # 合法写法逐字摆出来
+    assert "{lkp-probe.reading}" in violations[0].detail
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ["lkp-counter-height.min", "lkp-counter-height.max", "lkp-wardrobe-rod.v"],
+)
+def test_anonymous_item_kinds_reject_any_item_name(ref: str) -> None:
+    """single/range 只有一个匿名项，带项名即违规——``{lkp-x.min}`` 在语义上不成立。
+
+    min/max 是项的**值形态**不是项：引一端丢掉另一端由**结构**堵死（写得出但一定不合法），
+    不再靠打回提示劝住。``.v`` 同理——单值的 ``{"v": …}`` 外壳 v2.8 已经退场。
+    """
+    card = Card(thesis="这个高度这么定。", body=f"按 {{{ref}}} 做。", number_refs=[ref])
+
+    violations = [
+        v
+        for v in run_unit_gate([card], "ergonomics", PACKAGE)
+        if v.check == "gate-number-ref-unresolved"
+    ]
+
+    assert len(violations) == 1
+    assert "只有一个值，没有项可指" in violations[0].detail
+    if ref.endswith((".min", ".max")):
+        # 点破这一支，否则打回会被读成"项名写错了"，下一稿换个项名再来一遍
+        assert "min/max 是这条落点值的两端，不是项" in violations[0].detail
+
+
+def test_number_refs_are_declared_at_token_granularity() -> None:
+    """refs 的粒度＝记号本身逐字（"落点.项"），不是落点——两个集合仍逐字相等。"""
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="这一片分开两种用法看。",
+        body="平时按 {lkp-probe.general}，沙发旁读书那块按 {lkp-probe.reading}。",
+        number_refs=["lkp-probe.general", "lkp-probe.reading"],
+    )
+
+    assert run_unit_gate([card], "ergonomics", package) == []
+
+
+def test_declaring_the_anchor_while_writing_an_item_is_a_granularity_violation() -> None:
+    """粒度对不上要说粒度的话——不能配上"有值的落点不许说给不出"那句（那句在这一支是错的）。"""
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="沙发旁那块单独加亮。",
+        body="读书那块按 {lkp-probe.reading} 来。",
+        number_refs=["lkp-probe"],
+    )
+
+    violations = run_unit_gate([card], "ergonomics", package)
+    unused = [v for v in violations if v.check == "gate-number-ref-unused"]
+
+    assert "gate-number-ref-undeclared" in checks_of(violations)
+    assert len(unused) == 1
+    assert "粒度对不上" in unused[0].detail
+    assert "禁止的隐藏" not in unused[0].detail
+
+
+def test_declaring_one_item_and_writing_another_is_still_fake_confession() -> None:
+    """假坦白封堵在项这一层同样成立：声明了阅读那一项却只写了一般照度，那一项被藏起来了。"""
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="这一片按平时的用法定。",
+        body="整片按 {lkp-probe.general} 走，读书那档这轮给不出。",
+        number_refs=["lkp-probe.general", "lkp-probe.reading"],
+    )
+
+    unused = [
+        v
+        for v in run_unit_gate([card], "ergonomics", package)
+        if v.check == "gate-number-ref-unused"
+    ]
+
+    assert len(unused) == 1
+    assert "lkp-probe.reading" in unused[0].detail
+    assert "禁止的隐藏" in unused[0].detail
+
+
+def test_item_written_with_a_hyphen_gets_the_dot_form_in_the_hint() -> None:
+    """把项名用连字符拼进落点 id（{lkp-x-reading}）＝ 区间拆两端那条真跑形态的同族。
+
+    打回提示从**本域真实落点**算出它想写的是哪一个，不是套模板。
+    """
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="读书那块单独加亮。",
+        body="按 {lkp-probe-reading} 做。",
+        number_refs=["lkp-probe-reading"],
+    )
+
+    violations = [
+        v
+        for v in run_unit_gate([card], "ergonomics", package)
+        if v.check == "gate-number-ref-unresolved"
+    ]
+
+    assert "{lkp-probe.reading}" in violations[0].detail
+
+
+def test_item_name_leaking_into_the_body_is_rejected() -> None:
+    """项名不进业主视野（规则 1.9 三明文）：记号里可以有，正文里不行——业主不认识 general。"""
+    package = package_with_anchor("scenario", {"general": 100, "reading": 300})
+    card = Card(
+        thesis="这一片分两种用法。",
+        body="general 那一档按 {lkp-probe.general} 走。",
+        number_refs=["lkp-probe.general"],
+    )
+
+    violations = [
+        v for v in run_unit_gate([card], "ergonomics", package) if v.check == "gate-item-name-leak"
+    ]
+
+    assert len(violations) == 1
+    assert "「general」" in violations[0].detail
+
+
+def test_item_name_leak_check_does_not_over_block() -> None:
+    """过拦与漏拦同样是失效：记号内部的项名不算泄漏，`low-E` 这类正当写法也不算。"""
+    package = package_with_anchor("tier", {"low": 8, "medium": 12, "high": 18})
+    card = Card(
+        thesis="玻璃与档位这一段。",
+        body="窗上用 low-E 玻璃，柜子按 {lkp-probe.medium} 这一档配。",
+        number_refs=["lkp-probe.medium"],
+    )
+
+    assert "gate-item-name-leak" not in checks_of(run_unit_gate([card], "ergonomics", package))
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        ("single", {"v": 2136}),  # 单值套壳 v2.8 退场：标量就是标量
+        ("range", {"min": 900, "max": 950, "typical": 920}),  # 区间只有 min/max 两个边界
+        ("range", 900),
+        ("scenario", 100),  # 分项落点的值必须是 项名→值
+        ("scenario", {}),
+    ],
+)
+def test_package_gate_rejects_value_shape_that_contradicts_value_kind(
+    kind: str, value: Any
+) -> None:
+    """valueKind 是**判定**不是描述：数据里两者打架，模型会照着一份错清单写再被打回。
+
+    与既有 provenance 那两条同路——生产侧违约在最前面拦一次，不烧一次 LLM 调用。
+    """
+    package = package_with_anchor(kind, value)
+
+    assert "gate-anchor-value-shape" in checks_of(run_package_gate("ergonomics", package))
+
+
+def test_package_gate_rejects_min_max_as_an_item() -> None:
+    """把 min/max 当成项＝把 ``{lkp-x.min}`` 变回合法写法——本裁决"由结构堵死"的那条缝在这儿。"""
+    package = package_with_anchor("scenario", {"min": 100, "reading": 300})
+    violations = [
+        v for v in run_package_gate("ergonomics", package) if v.check == "gate-anchor-value-shape"
+    ]
+
+    assert len(violations) == 1
+    assert "值形态" in violations[0].detail
+
+
+def test_package_gate_rejects_item_names_outside_the_namespace() -> None:
+    """项名与落点标识同一套（ASCII 小写 kebab-case，规则 1.9 三）：形态不合的项引用不到。
+
+    只守形态不守词表：取值落在 tier 闭集还是 scenario 词表由资产回路的核验拒灌——
+    词表是开集且不随包下发，在消费侧照抄一份等于把真源劈成两处。
+    """
+    package = package_with_anchor("component", {"主材": {"min": 0.2, "max": 0.35}})
+    violations = [
+        v
+        for v in run_package_gate("ergonomics", package)
+        if v.check == "gate-anchor-item-name-invalid"
+    ]
+
+    assert len(violations) == 1
+    assert "主材" in violations[0].detail
+
+
+@pytest.mark.parametrize(("kind", "value", "item"), MULTI_ITEM_ANCHORS)
+def test_package_gate_accepts_every_well_formed_value_kind(
+    kind: str, value: Any, item: str
+) -> None:
+    """七类里的五类分项形态照收（另两类＝夹具里的 range 与 single）——门禁只拦形态不符的。"""
+    assert run_package_gate("ergonomics", package_with_anchor(kind, value)) == []

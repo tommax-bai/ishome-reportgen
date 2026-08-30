@@ -145,3 +145,60 @@ def test_package_accepts_triggered_rules_and_slices_them_by_domain() -> None:
 def test_package_without_triggered_rules_still_parses() -> None:
     """缺省空 = 生产方未升级的旧包，**不是"未触发"**：宽进，不据此拦截。"""
     assert load_package().triggered_rules_by_domain == {}
+
+
+# ---------------------------------------------------------------------------
+# 两层模型（规则 1.9，v2.8）：valueKind 七值闭集 + 项名 + 元信息出 value
+# ---------------------------------------------------------------------------
+
+
+def test_parses_value_kind_and_reference_plane() -> None:
+    """值构成随包下发；参考平面从 value 里搬出来，成了自己的字段（规则 1.9 二）。"""
+    package = load_package()
+    illuminance = package.domain_anchors("lighting")[0]
+
+    assert illuminance.value_kind == "scenario"
+    assert illuminance.reference_plane == "0.75m 水平面"
+    assert package.domain_anchors("ergonomics")[2].value == 2136  # 单值＝标量，v 壳退场
+
+
+def test_rejects_package_without_value_kind() -> None:
+    """值构成是必填不是可推断项：``{"min": 900}`` 到底是区间还是"名叫 min 的项"，靠猜
+    就等于把"不靠推断"这条裁决在消费侧还回去（同 presentation 的收窄纪律）。"""
+    legacy = copy.deepcopy(PACKAGE_JSON)
+    legacy["anchors"][0].pop("valueKind")
+    with pytest.raises(ValidationError):
+        load_package().__class__.model_validate(legacy)
+
+
+def test_rejects_unknown_value_kind() -> None:
+    """七值闭集之外整包解析失败：认不出构成类别，prompt 写不对、引用也判不对。"""
+    tainted = copy.deepcopy(PACKAGE_JSON)
+    tainted["anchors"][0]["valueKind"] = "matrix"
+    with pytest.raises(ValidationError):
+        load_package().__class__.model_validate(tainted)
+
+
+def test_item_names_follow_the_value_kind_not_the_key_shape() -> None:
+    """项名由 valueKind 判定：``range`` 的 min/max **不是项**，分项落点的键才是。"""
+    package = load_package()
+    counter, _, rod = package.domain_anchors("ergonomics")
+
+    assert counter.value_kind == "range"
+    assert counter.has_items is False
+    assert counter.item_names == []  # min/max 是值形态，不是项
+    assert rod.has_items is False
+
+    illuminance = package.domain_anchors("lighting")[0]
+    assert illuminance.has_items is True
+    assert illuminance.item_names == ["general", "reading"]  # 生产方给的顺序，不重排
+
+
+def test_anchor_brief_carries_item_names_but_no_value() -> None:
+    """推导步的入参：多了项名，**仍然没有值**——项名是标签不是数（规则 1.9 三）。"""
+    from reportgen_worker.models import AnchorBrief
+
+    brief = AnchorBrief.of(load_package().domain_anchors("lighting")[0])
+
+    assert brief.items == ["general", "reading"]
+    assert "value" not in brief.model_dump()

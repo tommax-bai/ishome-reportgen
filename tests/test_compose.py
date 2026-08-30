@@ -530,3 +530,49 @@ async def test_calibrated_anchor_needs_no_annotation() -> None:
     )
 
     assert "gate-provenance-annotation-missing" not in {v.check for v in book.violations}
+
+
+# ---------------------------------------------------------------------------
+# 两层模型（规则 1.9，v2.8）：引用某一项走完单元 → 装配 → 册级
+# ---------------------------------------------------------------------------
+
+ITEM_CARD = Card(
+    thesis="沙发旁读书那块得比平时亮。",
+    body=(
+        "客厅平时待着按 {lkp-illuminance-living.general} 就够，"
+        "沙发旁读书那块单独提到 {lkp-illuminance-living.reading}。"
+    ),
+    number_refs=["lkp-illuminance-living.general", "lkp-illuminance-living.reading"],
+)
+
+
+async def test_item_reference_flows_from_unit_to_book() -> None:
+    """立案样本本尊跑通整条链路：六轮真跑 0/6 想说而说不出的那句话，现在有合法写法了。
+
+    册级按**落点段**解析（引其中一项不改变它是哪条落点），故标注要求集与老形态一致。
+    """
+    lighting_unit = await compose(ScriptedWriter([[ITEM_CARD]]), domain="lighting")
+    assert lighting_unit.verdict == "ok"
+    assert lighting_unit.required_provenance == []  # 过门落点无需标注，与整条引用同结果
+
+    ergonomics_unit = await compose(ScriptedWriter([[GOOD_CARD]]))
+    assembled = PageAssembleResult.model_validate(
+        await activities.assemble_report_pages(
+            PageAssembleRequest(units=[lighting_unit, ergonomics_unit])
+        )
+    )
+    book = BookCheckResult.model_validate(
+        await activities.check_report_book(BookCheckRequest(pages=assembled.pages, package=PACKAGE))
+    )
+
+    assert book.verdict == "ok"
+
+
+async def test_derivation_sees_item_names_of_the_domain_anchors() -> None:
+    """项名随落点题名下发到推导步（值仍然不下发）——"分场景讲"是这一步的决定。"""
+    deriver = ScriptedDeriver([NarrativeClaim(claim="客厅平时待着和读书是两回事", anchors=[])])
+    await compose(ScriptedWriter([[LIGHTING_CARD]]), domain="lighting", deriver=deriver)
+
+    brief = deriver.seen_requests[0].anchors[0]
+    assert brief.items == ["general", "reading"]
+    assert "value" not in brief.model_dump()

@@ -198,3 +198,63 @@ def test_prompt_hands_annotation_duty_to_the_system() -> None:
     """
     system = build_messages(request_for())[0]["content"]
     assert "由系统自动挂在这一页上" in system
+
+
+# ---------------------------------------------------------------------------
+# 两层模型（规则 1.9，v2.8）：合法记号逐行摆出来，反例一个不进 prompt
+# ---------------------------------------------------------------------------
+
+
+def test_multi_item_anchor_lists_every_legal_token() -> None:
+    """分项落点**逐项列出记号**（数据驱动，同"撞禁词的落点逐行点名"那条路径）。
+
+    立案证据：灯光域六轮真跑 27/27 越界占位符都是「真落点 id + 该落点 value 里一个真实的键」——
+    模型缺的不是纪律是合法写法，那就把合法写法逐字摆在它眼前。
+    """
+    user = build_messages(request_for("lighting"))[1]["content"]
+
+    assert (
+        "这条分 2 项，各项的记号："
+        "{lkp-illuminance-living.general}、{lkp-illuminance-living.reading}"
+    ) in user
+
+
+def test_single_valued_anchor_says_reference_the_whole_thing() -> None:
+    """只有一个匿名项的落点：正面告诉它整条引用就行，不摆"不要写 X"那种反例。"""
+    user = build_messages(request_for())[1]["content"]
+
+    assert "这条只有一个值，引用写 {lkp-counter-height}" in user
+    assert "这条只有一个值，引用写 {lkp-wardrobe-rod}" in user
+
+
+def test_forbidden_reference_forms_stay_out_of_the_prompt() -> None:
+    """prompt 铁律一：禁止词面永远不进 prompt，进确定性校验。
+
+    真跑证据：把「得一起定」当反例写进指令，4/5 主张逐字照抄了禁句本身（示范句可抄性同病）。
+    故 v2.8 拆掉了旧的"不要拆成 {lkp-x-min}/{lkp-x-max}"那句——那条形态现在由机检拦，
+    而且两层模型已经让它写不成合法句子。
+    """
+    system = build_messages(request_for())[0]["content"]
+
+    assert "不要拆成" not in system
+    assert "-min}" not in system
+    assert "{lkp-x.min}" not in system
+
+
+def test_reference_plane_never_reaches_the_writer() -> None:
+    """参考平面不下发（v2.8 它从 value 里搬出来之后就不再进 prompt）。
+
+    两条理由：它的文字里带着数（"0.75m 水平面"），进 prompt 就是给模型一段可照抄的裸数字；
+    而"这个数说的是哪个平面"是渲染层出标注时的事，渲染层直读数据包，不经成文线转手。
+    """
+    messages = build_messages(request_for("lighting"))
+    assert PACKAGE.domain_anchors("lighting")[0].reference_plane == "0.75m 水平面"
+    assert all("水平面" not in m["content"] for m in messages)
+    assert all("0.75" not in m["content"] for m in messages)
+
+
+def test_item_names_are_flagged_as_internal_labels() -> None:
+    """项名进得了记号进不了正文（规则 1.9 三"项名不进业主视野"）——prompt 与 gate 同口径。"""
+    system = build_messages(request_for("lighting"))[0]["content"]
+
+    assert "记号里点号后面那一段（项名）同样是内部标签" in system

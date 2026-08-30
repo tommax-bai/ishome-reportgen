@@ -4,9 +4,13 @@
 三类判据分离：
 
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
-  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名、语域示范不得被逐字抄进正文、
-  **正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）。
+  占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名与裸项名、
+  语域示范不得被逐字抄进正文、**正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
+  **两层模型（规则 1.9，v2.8）**：一条落点＝若干项，正文可写 ``{lkp-x.项名}`` 引其中一项。
+  ``single``/``range`` 只有一个匿名项，带项名即违规；其余五类的项名必须真实存在，
+  打回提示**逐字列出该落点有哪几项**——灯光域六轮真跑 27/27 越界占位符都是"真落点 id +
+  该落点 value 里一个真实的键"，模型缺的不是纪律是**合法写法**，而旧提示从不告诉它有哪些选择。
 - **语域与标注门禁（gate-thesis-\\* / gate-assertion-\\* / gate-provenance-\\*）**：规则
   4.10a/4.10c/5.8 的消费侧强制。判定由求值线做完（anchors[].presentation 与
   anchors[].provenance.annotationRequired），本层只做**可确定性判定**的事：①卡片声明的断言预算
@@ -28,6 +32,7 @@ from __future__ import annotations
 import re
 
 from reportgen_worker.models import (
+    ITEM_NAME_RE,
     Card,
     NarrativeClaim,
     ProvenanceNote,
@@ -36,7 +41,14 @@ from reportgen_worker.models import (
     Violation,
 )
 
-PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)\}")
+PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)(?:\.([a-z0-9-]+))?\}")
+"""正文记号（规则 1.9 两层模型，v2.8）：``{lkp-x}`` 引整条，``{lkp-x.项名}`` 引其中一项。
+
+``{lkp-x.min}`` 形态上匹配得上，**语义上一定不合法**——``min``/``max`` 是项的值形态不是项，
+故 ``single``/``range`` 落点带项名一律违规（:func:`ref_violation`）。"引一端丢掉另一端"由此
+**由结构堵死**：不是靠打回提示劝住，而是那条落点根本没有第二项可指。
+"""
+REF_SEPARATOR = "."
 DIGIT_RE = re.compile(r"[0-9０-９]")
 BARE_LKP_RE = re.compile(r"lkp-", re.IGNORECASE)
 
@@ -77,6 +89,115 @@ CALIBRATED = "calibrated"
 # **逐字抄进卡片**当成这家人的结论——示范是"怎么讲"的样本，不是"讲什么"的素材，抄过去就成了
 # 一句没有落点背书、与这家人无关的断言。整句重合是确定性判据，故归本层；半句化用属语义，归判官层。
 MIN_SAMPLE_LENGTH = 12
+
+
+def placeholder_refs(text: str) -> set[str]:
+    """正文里出现过的记号（花括号内逐字）：``lkp-x`` 或 ``lkp-x.项名``。"""
+    return {
+        match.group(1) + (f"{REF_SEPARATOR}{match.group(2)}" if match.group(2) else "")
+        for match in PLACEHOLDER_RE.finditer(text)
+    }
+
+
+def split_ref(ref: str) -> tuple[str, str | None]:
+    """记号 → （落点 id，项名或 None）。落点 id 里不含点号，故按第一个点号切即可。"""
+    base, separator, item = ref.partition(REF_SEPARATOR)
+    return base, item if separator else None
+
+
+def anchor_id_of(ref: str) -> str:
+    """记号 → 它指的落点（下游按落点粒度做的事都从这里取：依据标注、册级解析）。"""
+    return split_ref(ref)[0]
+
+
+def item_tokens(anchor: ReportAnchor) -> list[str]:
+    """这条落点**可以逐字写进正文的记号**（分项落点用，供 prompt 与打回提示共用一份口径）。
+
+    给整只记号而不是光给项名：模型要抄的是记号，列项名等于让它自己拼一次——
+    真跑证据说的就是"想说的那句话没有合法写法"，那么合法写法就该逐字摆在它眼前。
+    """
+    return [f"{{{anchor.lkp_id}{REF_SEPARATOR}{item}}}" for item in anchor.item_names]
+
+
+def _granularity_mismatch(ref: str, placeholders: set[str]) -> bool:
+    """声明的记号与正文的记号**只差在粒度上**：同一条落点，一边写整条一边写某一项。
+
+    判得这么窄是有代价意识的：放宽成"落点段相同即算粒度错"会把"声明了这一项、正文写了另一项"
+    也算进来，而那一项有值却没露面正是假坦白要封的形态，得走另一支的话术。
+    """
+    base, item = split_ref(ref)
+    if item is None:
+        # 声明了整条，正文写的是它的某一项
+        return any(p != base and anchor_id_of(p) == base for p in placeholders)
+    # 声明了某一项，正文写的是整条
+    return base in placeholders
+
+
+def _unresolved_hint(ref: str, anchors_by_id: dict[str, ReportAnchor]) -> str:
+    """落点段就认不出时的打回提示：从**本域真实落点**算出它想写的是哪条，不是套模板。
+
+    两种真跑/预期形态都用连字符把第二段拼进了落点 id：``{lkp-x-min}``（区间拆两端，
+    2026-08-28 实测）与 ``{lkp-x-reading}``（项名写成连字符，两层模型上线后的同族形态）。
+    """
+    for base in sorted(anchors_by_id, key=len, reverse=True):
+        if not ref.startswith(f"{base}-"):
+            continue
+        anchor, suffix = anchors_by_id[base], ref[len(base) + 1 :]
+        if suffix in anchor.item_names:
+            return f"——项要用点号挂在落点后面，写 {{{base}{REF_SEPARATOR}{suffix}}}"
+        if suffix in {"min", "max"} and not anchor.has_items:
+            return (
+                f"——{base} 只有一个值，写 {{{base}}} 就行：上下限各管一条纪律"
+                "（下限管够不够，上限管过不过），拆一端会丢掉另一端"
+            )
+    return "（数字只能引用求值线产出）"
+
+
+def ref_violation(label: str, ref: str, anchors_by_id: dict[str, ReportAnchor]) -> Violation | None:
+    """一条记号的引用合法性（规则 1.9 两层模型，v2.8）：认不出即违规，认得出就说清合法写法。
+
+    三种不合法逐条给**不同的话**，判据编号仍是同一条——语义没变（"引用解析不到"），
+    变的只是它该被告知什么：
+
+    - 落点段不认识 → 可能是把项/区间端拼进了 id，:func:`_unresolved_hint` 算出它想写什么；
+    - ``single``/``range`` 带项名 → 这条落点只有一个匿名项，整条引用即可（``{lkp-x.min}``
+      落在这一支：min/max 是值形态不是项）；
+    - 分项落点写了不存在的项 → **逐字列出它有哪几项**。这一条是本轮最要紧的：灯光域六轮真跑
+      27/27 的越界占位符都是"真落点 id + 该落点 value 里一个真实的键"，模型不是不守规矩，
+      是想说的那句话没有合法写法；旧提示连吃三稿的原因也在此——它没告诉模型有哪些合法选择。
+    """
+    base, item = split_ref(ref)
+    anchor = anchors_by_id.get(base)
+    if anchor is None:
+        return Violation(
+            check="gate-number-ref-unresolved",
+            detail=f"{label} 引用 {ref} 不在本域落点对象内{_unresolved_hint(ref, anchors_by_id)}",
+        )
+    if item is None:
+        return None
+    if not anchor.has_items:
+        # min/max 这一支单独点破：它是这条落点值的两端（值形态），不是项——
+        # 不说这一句，打回只会被理解成"项名写错了"，下一稿换个项名再来一遍。
+        boundary = "（min/max 是这条落点值的两端，不是项）" if item in {"min", "max"} else ""
+        return Violation(
+            check="gate-number-ref-unresolved",
+            detail=(
+                f"{label} 引用 {ref}：{base}（{anchor.name}）只有一个值，没有项可指{boundary}——"
+                f"写 {{{base}}} 引整条即可（值是区间就整条渲染成区间）"
+            ),
+        )
+    if item not in anchor.item_names:
+        choices = (
+            "、".join(item_tokens(anchor)) or "（一项都列不出：该落点值形态与 valueKind 不符）"
+        )
+        return Violation(
+            check="gate-number-ref-unresolved",
+            detail=(
+                f"{label} 引用 {ref}：{base}（{anchor.name}）没有「{item}」这一项。"
+                f"它有这几项，要哪一项就逐字写哪一个：{choices}"
+            ),
+        )
+    return None
 
 
 def collect_banned_terms(domain: str, package: ReportDataPackage) -> list[str]:
@@ -135,12 +256,15 @@ def required_provenance_notes(
     引用面取 ``number_refs`` 与正文占位符的**并集**：两者不一致本身是违规
     （``gate-number-ref-undeclared``），但标注要求不能等违规先被修好——过检没过的稿子不会成页，
     过了检的两者必然一致，取并集只是让本函数与门禁的执行次序无关。
+
+    记号一律先取**落点段**（v2.8）：标注说的是"这个数从哪来、什么时候取的"，那是整条落点的属性，
+    引其中一项不改变它的来源——按项标注等于同一份来源在页脚重复几遍。
     """
     required = annotation_required_anchors(package)
     referenced: set[str] = set()
     for card in cards:
-        referenced |= set(card.number_refs)
-        referenced |= set(PLACEHOLDER_RE.findall(f"{card.thesis}\n{card.body}"))
+        referenced |= {anchor_id_of(ref) for ref in card.number_refs}
+        referenced |= {anchor_id_of(ref) for ref in placeholder_refs(f"{card.thesis}\n{card.body}")}
     return [provenance_note(required[ref]) for ref in sorted(referenced & set(required))]
 
 
@@ -183,15 +307,86 @@ def unbacked_predicates(domain: str, package: ReportDataPackage) -> list[str]:
     return sorted(p for p in assertion_budget(domain, package) if p not in backed)
 
 
+def _value_shape_violation(anchor: ReportAnchor) -> Violation | None:
+    """``value`` 的形态与 ``value_kind`` 对不上（规则 1.9 一，v2.8）。
+
+    为什么值得在这里拦一次：``value_kind`` 是**判定**不是描述——prompt 按它列合法记号、
+    门禁按它判引用。数据里两者打架时，模型会照着一份错清单写，然后被一条它无从修正的违规打回。
+    与既有 provenance 那两条同路：生产侧违约在最前面响亮报出，不烧一次 LLM 调用。
+
+    ``min``/``max`` 出现在分项落点的项位上一并拦：项名闭集/词表里没有它们，
+    而放它进来就等于把 ``{lkp-x.min}`` 变成合法写法——本裁决"由结构堵死"的那条缝正在这儿。
+    """
+    kind, value = anchor.value_kind, anchor.value
+    if not anchor.has_items:
+        if kind == "single" and isinstance(value, dict):
+            return Violation(
+                check="gate-anchor-value-shape",
+                detail=f"{anchor.lkp_id} valueKind=single 的值必须是标量，收到字典 {sorted(value)}",
+            )
+        boundaries = set(value) if isinstance(value, dict) else set()
+        if kind == "range" and (not boundaries or boundaries - {"min", "max"}):
+            return Violation(
+                check="gate-anchor-value-shape",
+                detail=(
+                    f"{anchor.lkp_id} valueKind=range 的值必须是 {{min,max}}（单边界只给一侧），"
+                    f"收到 {sorted(boundaries) if boundaries else type(value).__name__}"
+                ),
+            )
+        return None
+    if not isinstance(value, dict) or not value:
+        return Violation(
+            check="gate-anchor-value-shape",
+            detail=f"{anchor.lkp_id} valueKind={kind} 是分项落点，值必须是 项名→值 的字典",
+        )
+    boundary_as_item = sorted(set(value) & {"min", "max"})
+    if boundary_as_item:
+        return Violation(
+            check="gate-anchor-value-shape",
+            detail=(
+                f"{anchor.lkp_id} 把 {boundary_as_item} 当成了项——min/max 是项的**值形态**不是项"
+                "（规则 1.9 一）；一项的值是区间就写成该项名下的 {min,max}"
+            ),
+        )
+    return None
+
+
+def _item_name_violations(anchor: ReportAnchor) -> list[Violation]:
+    """项名不合命名空间形态（规则 1.9 三）：ASCII 小写 kebab-case。
+
+    消费侧只守**形态**不守词表：取值落在 tier 闭集还是 scenario 词表里，由资产回路的核验拒灌
+    （词表是开集、不随包下发，在这里照抄一份等于把真源劈成两处）。形态这一半必须守——
+    项名与落点标识同处一个记号，形态不合的项**结构性地引用不到**（记号正则匹配不上），
+    它会以"prompt 里列着、一写就被打回"的形态耗掉整轮重写。
+    """
+    return [
+        Violation(
+            check="gate-anchor-item-name-invalid",
+            detail=(
+                f"{anchor.lkp_id} 的项名「{item}」不合命名空间——项名与落点标识同一套"
+                "（ASCII 小写 kebab-case，规则 1.9 三）；这样的项写不进记号，正文引用不到它"
+            ),
+        )
+        for item in anchor.item_names
+        if not ITEM_NAME_RE.match(item)
+    ]
+
+
 def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]:
     """写作前的生产方契约守卫：数据包本身违约的，不必烧一次 LLM 调用才发现。
 
     v2.4 起守的是**标注纪律的上游**：求值线声称某落点不必标注，但它根本没过可核性门——
     这一条若放过去，页级比对门禁会跟着一起放过（要求集是从 provenance 读的），
     整条标注链路就被生产侧一个字段悄悄关掉了。故在最前面拦一次，方向偏严。
+
+    v2.8 加两条同路的（值的两层模型）：``value`` 形态与 ``value_kind`` 对不上、项名不合命名空间。
     """
     violations: list[Violation] = []
     for anchor in package.anchors:
+        shape = _value_shape_violation(anchor)
+        if shape is not None:
+            violations.append(shape)
+        violations.extend(_item_name_violations(anchor))
         provenance = anchor.provenance
         if provenance is None:
             continue
@@ -239,7 +434,16 @@ def run_unit_gate(
                 ),
             )
         )
-    anchor_ids = {a.lkp_id for a in package.domain_anchors(domain)}
+    domain_anchors = package.domain_anchors(domain)
+    anchors_by_id = {a.lkp_id: a for a in domain_anchors}
+    anchor_ids = set(anchors_by_id)
+    # 项名不进业主视野（规则 1.9 三明文）：读者看到的是正文里的人话与渲染出的数值。
+    # 记号里的项名不算——那是渲染契约，与 {lkp-*} 同理，故判据跑的是**剥掉记号之后**的正文。
+    item_name_res = {
+        item: re.compile(rf"(?<![a-z0-9-]){re.escape(item)}(?![a-z0-9-])", re.IGNORECASE)
+        for anchor in domain_anchors
+        for item in anchor.item_names
+    }
     # 断言预算核验仍要它（规则 5.8：谓词 requires 必须全部过可核性门）——v2.4 拆掉的是
     # "主旨句支点必须过门"，不是"断言必须有背书"
     supported = thesis_support_ids(domain, package)
@@ -274,23 +478,17 @@ def run_unit_gate(
                 )
             )
 
-        placeholders = set(PLACEHOLDER_RE.findall(text))
-        for ref in sorted(placeholders | set(card.number_refs)):
-            if ref not in anchor_ids:
-                # 真跑常见形态：模型想分别引用区间两端，自造 {lkp-x-min}/{lkp-x-max}。
-                # 打回理由要说清渲染契约（一个占位符=整条落点），否则它只会换个名字再造一次。
-                base = re.sub(r"-(min|max)$", "", ref)
-                hint = (
-                    f"——占位符代表整条落点，区间写 {{{base}}} 即可，拆 min/max 会丢掉另一端"
-                    if base != ref and base in anchor_ids
-                    else "（数字只能引用求值线产出）"
-                )
-                violations.append(
-                    Violation(
-                        check="gate-number-ref-unresolved",
-                        detail=f"{label} 引用 {ref} 不在本域落点对象内{hint}",
-                    )
-                )
+        placeholders = placeholder_refs(text)
+        # 引用合法性按**记号**判（v2.8 两层模型）：落点段认不认识、项名指不指得到，
+        # 三种不合法各给各的话，判据编号仍是"引用解析不到"这一条（语义没变）。
+        violations.extend(
+            v
+            for v in (
+                ref_violation(label, ref, anchors_by_id)
+                for ref in sorted(placeholders | set(card.number_refs))
+            )
+            if v is not None
+        )
         undeclared = placeholders - set(card.number_refs)
         if undeclared:
             violations.append(
@@ -304,14 +502,32 @@ def run_unit_gate(
         # "这五项目前给不出可靠数值"、零占位符：值被藏起来了，而 v2.4 禁止隐藏。原先只查
         # "用了没声明"，这一半漏着，假坦白就从缝里过了检。
         unused = set(card.number_refs) - placeholders
-        if unused:
+        # v2.8 起这里有两种成因，话必须分开说：**粒度写错**（同一条落点，正文写整条 refs 写项、
+        # 或反过来）与**真的没引用**。不分开的代价是给粒度错误配上一句"有值的落点不许说给不出"——
+        # 那句话在这一支是错的，而反馈循环里一句对不上的打回等于没打回。
+        # 注意"声明了 reading、正文只写了 general"**不算**粒度错：那一项有值却没露面，
+        # 正是假坦白要封的形态，它归下面那一支。
+        mismatched = sorted(r for r in unused if _granularity_mismatch(r, placeholders))
+        if mismatched:
             violations.append(
                 Violation(
                     check="gate-number-ref-unused",
                     detail=(
-                        f"{label} number_refs 声明了却未在正文引用：{sorted(unused)}"
-                        "——refs 是占位符全集声明；这些落点有值，要么引用它，要么别声明"
-                        "（有值的落点不许说「给不出」，那是被禁止的隐藏）"
+                        f"{label} number_refs 与正文的记号粒度对不上：{mismatched}"
+                        "——refs 逐字写正文里的那个记号（正文写 {lkp-x.项名} 就声明 lkp-x.项名）；"
+                        f"本卡正文实际写了：{sorted(placeholders)}"
+                    ),
+                )
+            )
+        absent = sorted(set(unused) - set(mismatched))
+        if absent:
+            violations.append(
+                Violation(
+                    check="gate-number-ref-unused",
+                    detail=(
+                        f"{label} number_refs 声明了却未在正文引用：{absent}"
+                        "——refs 是占位符全集声明；这些落点（或落点里的这几项）有值，"
+                        "要么引用它，要么别声明（有值的不许说「给不出」，那是被禁止的隐藏）"
                     ),
                 )
             )
@@ -373,6 +589,21 @@ def run_unit_gate(
                     ),
                 )
             )
+        # 同一条纪律的项名一半（规则 1.9 三"项名不进业主视野"，v2.8）：项名是与落点标识同一套的
+        # 内部标签，业主不认识 general/high-vs-medium。它与裸 lkp- 分成两条判据是因为
+        # **语义不同**：那条判的是落点编号泄漏，这条判的是项名泄漏，判据名字与语义必须一致。
+        # 词边界匹配（前后不接 ASCII 字母数字连字符）：`low-E 玻璃` 这类正当写法不误伤。
+        for item, item_re in item_name_res.items():
+            if item_re.search(stripped):
+                violations.append(
+                    Violation(
+                        check="gate-item-name-leak",
+                        detail=(
+                            f"{label} 正文出现分项记号「{item}」——项名是内部标签不进客户语域；"
+                            "要那一项的数就写 {lkp-id.项名} 占位，那一项是什么场合用人话说"
+                        ),
+                    )
+                )
 
         for term in banned:
             if term in text:

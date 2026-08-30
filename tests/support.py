@@ -21,6 +21,8 @@ PACKAGE_JSON: dict[str, Any] = {
             "name": "橱柜台面高",
             "numberClass": "selection",
             "unit": "mm",
+            # 两层模型（规则 1.9，v2.8）：一个匿名项、值是区间 → 只能整条引用 {lkp-counter-height}
+            "valueKind": "range",
             "value": {"min": 900, "max": 950},
             "basisTag": "ergonomics@v1",
             "source": "行业通行",
@@ -41,6 +43,8 @@ PACKAGE_JSON: dict[str, Any] = {
             "name": "主通道净宽",
             "numberClass": "analysis",
             "unit": "mm",
+            # 单边界只给一侧——仍是 range 的一个匿名项，不是"名叫 min 的项"
+            "valueKind": "range",
             "value": {"min": 900},
             "basisTag": "ergonomics@v1",
             "source": "GB 50352 条文",
@@ -62,7 +66,9 @@ PACKAGE_JSON: dict[str, Any] = {
             "name": "衣柜挂杆高",
             "numberClass": "selection",
             "unit": "mm",
-            "value": {"v": 2136},
+            # v2.8：单值不再套 {"v": …} 的壳（那层壳让 v 看着像一个项）——标量就是标量
+            "valueKind": "single",
+            "value": 2136,
             "basisTag": "ergonomics@v1",
             "source": "行业通行",
             "calibration": "draft",
@@ -81,7 +87,12 @@ PACKAGE_JSON: dict[str, Any] = {
             "name": "起居室照度标准值",
             "numberClass": "analysis",
             "unit": "lx",
+            # 分场景落点（规则 1.9，v2.8）：两项各是一个数，正文可引用其中一项
+            # ——立案样本本尊（"沙发旁读书那块要单独加亮"六轮真跑写不出来的那句话）
+            "valueKind": "scenario",
             "value": {"general": 100, "reading": 300},
+            # 元信息出 value（规则 1.9 二）：参考平面各归各的字段，不与项同层
+            "referencePlane": "0.75m 水平面",
             "basisTag": "lighting@v2",
             "source": "GB 50034-2013 表5.2.1；GB/T 50034-2024 同值",
             "calibration": "calibrated",

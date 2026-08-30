@@ -31,6 +31,7 @@ from reportgen_worker.deriver import (
     NarrativeDeriver,
 )
 from reportgen_worker.gate import (
+    anchor_id_of,
     annotation_required_anchors,
     backed_predicates,
     collect_banned_terms,
@@ -363,7 +364,9 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
                 )
             )
         mounted_notes = {note.lkp_id: note for note in page.provenance_notes}
-        referenced = sorted({ref for card in page.cards for ref in card.number_refs})
+        # 记号先取落点段（规则 1.9 两层模型，v2.8）：标注是整条落点的属性（这个数从哪来、
+        # 什么时候取的），引其中一项不改变它的来源——按项比对只会把同一份标注要求算成几份。
+        referenced = sorted({anchor_id_of(ref) for card in page.cards for ref in card.number_refs})
         for ref in referenced:
             if ref not in annotation_required:
                 continue
@@ -390,7 +393,9 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
                 )
         for card in page.cards:
             for ref in card.number_refs:
-                if ref not in anchor_ids:
+                # 册级只判**落点段**解析得到与否：项名合不合法在单元层判过（那里有本域落点的
+                # 全部项，话也说得具体），册级重判一遍只会把同一件事用两套话说两遍。
+                if anchor_id_of(ref) not in anchor_ids:
                     violations.append(
                         Violation(
                             check="gate-number-ref-unresolved",

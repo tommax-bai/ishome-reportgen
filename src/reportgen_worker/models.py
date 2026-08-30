@@ -7,15 +7,50 @@ Jackson camelCase 序列化——本侧 snake_case 字段 + to_camel 别名对�
 - **自包含**：persona 全文、cr- 判据、禁词表随包，成文线不回查任何库；
 - **匿名**：`extra="forbid"`——任何用户/项目标识字段直接解析失败（结构性守卫）；
 - **数字纪律**：卡片正文禁裸数字，数字只经 ``{lkp-*}`` 占位引用落点对象
-  （出口过检逐字段比对零漂移）。
+  （出口过检逐字段比对零漂移）。**两层模型**（规则 1.9，v2.8）：一条落点＝若干项，
+  一项的值＝一个数或一个区间，正文可引用其中一项（``{lkp-x.项名}``）。
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
+
+ValueKind = Literal["single", "range", "scenario", "tier", "dimension", "component", "comparison"]
+"""落点值的构成类别（规则 1.9 一，v2.8）：七值闭集，**随包下发不靠推断**。
+
+一条字段同时判定三件事：``value`` 的形态、可否单项引用、项名受哪个词表约束。
+枚举之外的值**整包解析失败**（同 ``presentation`` 的收窄纪律）：认不出构成类别，
+prompt 写不对、引用也判不对，静默当成某一类比拒收危险。
+"""
+
+ANONYMOUS_ITEM_KINDS: frozenset[str] = frozenset({"single", "range"})
+"""只有**一个匿名项**的两类（规则 1.9 一）：``single`` 的值是标量、``range`` 的值是 ``{min,max}``。
+
+匿名 = 没有项名可写，正文只能整条引用 ``{lkp-x}``。**``min``/``max`` 不是项**，是项的值形态——
+故 ``{lkp-x.min}`` 在语法上不存在，"引一端丢掉另一端"由**结构**堵死而不靠纪律禁止
+（物理隔离优先于规则隔离，落在引用语法上的形态）。
+"""
+
+ITEM_NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+"""项名形态：ASCII 小写 kebab-case，与落点标识同一套（规则 1.9 三）。
+
+项名与落点标识**同处一个记号**（``{lkp-x.项名}``），混语言等于在一个标识符里放两种文字；
+项名不进业主视野（读者看到的是正文里的人话与渲染出的数值），故"中文语义更准"在此不成立。
+取值落在哪个词表（``tier`` 闭集、``scenario`` 受控词表…）由**资产回路的核验拒灌**，
+消费侧只守形态——词表是开集且不随包下发，在这里照抄一份等于把词表分裂成两处真源。
+"""
+
+AnchorValue = int | float | dict[str, Any]
+"""两层模型的值形态（规则 1.9 一）：``single`` 是标量；其余是字典——``range`` 为 ``{min,max}``
+（单边界只给一侧），其余五类为 项名 → 标量 或 项名 → ``{min,max}``。
+
+**元信息不进这里**：单位见 ``unit``、参考平面见 ``reference_plane``（规则 1.9 二）。
+只要元信息与项同层，``{lkp-x.unit}``（引用出一个单位字符串）就是语法上合法的写法，约定管不住。
+"""
 
 
 class _PackageModel(BaseModel):
@@ -59,19 +94,48 @@ class ReportAnchor(_PackageModel):
     v2.4 裁决 2026-08-29 取消了"隐藏"这一档，故 ``presentation`` 不再有 ``WITHHELD``：
     枚举值收窄是**故意的严**——真收到一个 WITHHELD，说明生产方还停在 v2.3 在隐藏落点，
     那时整包解析失败比放它进来更安全（隐藏本身已是违约，而不再是纪律）。
+
+    **两层模型**（规则 1.9，v2.8）：一条落点 = 若干「项」，一项的值 = 一个数或一个区间。
+    ``value_kind`` 是必填而非可推断项——收到没有它的包**整包解析失败**，同 ``presentation``
+    的理由：``{"min": 900}`` 到底是"下限 900 的区间"还是"名叫 min 的项"，靠猜就等于把
+    "不靠推断"这条裁决在消费侧还回去。
     """
 
     lkp_id: str
     name: str
     number_class: str | None = None
     unit: str | None = None
-    value: dict[str, Any]
+    value_kind: ValueKind
+    value: AnchorValue
     basis_tag: str
     source: str | None = None
     calibration: str
     degraded: bool
     provenance: AnchorProvenance | None = None
     presentation: Literal["THESIS_SUPPORT", "REFERENCE_ONLY"]
+    reference_plane: str | None = None
+    """参考平面及其高度（国标术语，如"0.75m 水平面"）：v2.8 前它挤在 ``value`` 里当一个键。
+
+    **成文线只收不发**：它一个字都不进写作/推导 prompt——文字里带着数（"0.75m"），进 prompt
+    就是给模型一段可照抄的裸数字（正文禁裸数字，抄了必被打回）；而"这个数说的是哪个平面"
+    是渲染层出标注时的事，渲染层直读数据包，不经成文线转手。
+    """
+
+    @property
+    def has_items(self) -> bool:
+        """这条落点分不分项（规则 1.9 一）：``single``/``range`` 只有一个匿名项，其余五类分项。"""
+        return self.value_kind not in ANONYMOUS_ITEM_KINDS
+
+    @property
+    def item_names(self) -> list[str]:
+        """本落点的项名清单（不分项或值形态不合时为空）。
+
+        **按生产方给的顺序**不排序：档位落点的 low/medium/high、维度落点的 depth/width/height
+        本身有序，排字典序会把它打乱；JSON 对象的顺序随包稳定，确定性不因此丢失。
+        """
+        if not self.has_items or not isinstance(self.value, dict):
+            return []
+        return list(self.value)
 
     @property
     def requires_annotation(self) -> bool:
@@ -260,6 +324,13 @@ class ReportDataPackage(_PackageModel):
 class Card(BaseModel):
     """卡片（客户语域）：body/thesis 禁裸数字，数字经 {lkp-*} 占位；number_refs=占位符全集声明。
 
+    ``number_refs`` 的粒度＝**记号本身逐字**（规则 1.9 两层模型，v2.8）：正文写
+    ``{lkp-x.reading}`` 就声明 ``lkp-x.reading``，写 ``{lkp-x}`` 就声明 ``lkp-x``。
+    定在"落点.项"而不是落点，理由是这个字段的定义就是"占位符全集"——而一个占位符现在
+    可以是一项：按落点声明会让"声明了两项、正文只写了一项"这种半隐藏与合规稿在集合上长得一样，
+    而封堵假坦白（``gate-number-ref-unused``）靠的正是两个集合逐字相等。
+    需要落点粒度的下游（依据标注、册级解析）自己取记号的落点段，那是投影不是口径。
+
     ``assertions`` = 本卡声明使用的**断言预算谓词**（persona 的 assertion_budget 谓词名，规则
     5.8/4.13）。"这句是不是判断句"是语义判断、机检判不确定，所以纪律改成可确定性判定的形态：
     要说判断句就得先声明用的是哪条预算，出口过检再核该谓词的 requires 是否全部已求值且非降档
@@ -328,11 +399,18 @@ class UnitComposeRequest(BaseModel):
 
 
 class AnchorBrief(BaseModel):
-    """落点题名：id + 名字 + 量纲，**没有值**——叙事推导那一步唯一看得见的落点信息。
+    """落点题名：id + 名字 + 量纲 + **项名清单**，**没有值**——叙事推导唯一看得见的落点信息。
 
     为什么砍掉值而不是"叮嘱它别写数字"：图 v0.2 §3 要求推导步"只组织怎么讲，不产生任何数字"。
     把值递过去再要求它别用，是拿 prompt 当门禁；不给值，它**结构性地产不出数字**——同"写作层
     拿不到锁定文案正文"的分层理由（规则 2.4）。数字是下一步（卡片写作）的事，那一步看得见值。
+
+    ``items`` 是**项名不是值**（规则 1.9，v2.8 加）：一条落点分几项、分的是哪几项，
+    是"这一章讲几件事"要用的信息——"卧室的灯光和客厅的灯光肯定会不一样"（用户裁决原话）
+    正是推导该决定的事，而推导若不知道照度落点分着一般活动与阅读两项，它只能把两项挤成一条主张，
+    到写作那一步再临场决定拆不拆——那正好是"讲什么"没有环节负责的老形态。
+    加项名**不破**"看不见值"：项名与 ``name``/``unit`` 同类，是标签不是数，
+    推导拿着 general/reading 依然产不出任何一个数字。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -340,10 +418,13 @@ class AnchorBrief(BaseModel):
     lkp_id: str
     name: str
     unit: str | None = None
+    items: list[str] = []
 
     @classmethod
     def of(cls, anchor: ReportAnchor) -> AnchorBrief:
-        return cls(lkp_id=anchor.lkp_id, name=anchor.name, unit=anchor.unit)
+        return cls(
+            lkp_id=anchor.lkp_id, name=anchor.name, unit=anchor.unit, items=anchor.item_names
+        )
 
 
 class NarrativeClaim(BaseModel):

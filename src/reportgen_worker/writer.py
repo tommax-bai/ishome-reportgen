@@ -7,6 +7,9 @@ prompt 只从报告数据包内的 persona 载荷与落点对象拼装——运�
 
 语域纪律在 prompt 侧的形态（规则 4.10a/4.10c/5.8）：落点按 ``presentation`` 分【可作支点】与
 【未过门·建议口吻】两档逐条标注；判断句题目按断言预算切成"这轮许说/这轮不许说"两张清单。
+引用纪律的形态（规则 1.9 两层模型，v2.8）：每条落点**逐行摆出它的合法记号**——只有一个值的
+写整条，分了项的把每一项的记号列全（:func:`_anchor_line`）。反例一律不进 prompt（铁律一），
+写不得的形态由 :mod:`reportgen_worker.gate` 拦。
 prompt 只是第一道，**不是门禁**——真正拦截在 :mod:`reportgen_worker.gate`
 （判据下沉次序 schema > 规则 > prompt > 判官，图 v0.2 §3）。
 **v2.4 起没有落点被扣着不下发**（隐藏档取消）：未过门的照常进 prompt、也可以进主旨句，
@@ -34,6 +37,8 @@ from reportgen_worker.gate import (
     CHINESE_NUMBER_RE,
     DIGIT_RE,
     PLACEHOLDER_RE,
+    THESIS_SUPPORT,
+    item_tokens,
 )
 from reportgen_worker.models import (
     Card,
@@ -153,6 +158,29 @@ def judgment_pairs(
     return pairs
 
 
+def _anchor_line(anchor: ReportAnchor) -> str:
+    """落点的下发行：题名 + 值 + 语域档 + **这条落点可以怎么引用**（规则 1.9，v2.8）。
+
+    合法写法**逐行摆出来**（数据驱动：记号从 value 里的项算出来，不是编的）——同"撞禁词的落点
+    逐行点名"那条路径。立案证据：灯光域同包同码同参六轮 0/6 过检，六轮全部 27 种越界占位符
+    **27/27 逐字等于「真实落点 id」＋「该落点 value 字典里一个真实的键」**——模型想说的那句话
+    （"沙发旁读书那块要单独加亮"）当时没有合法写法，而 prompt 里也没有一处告诉它有哪些选择。
+
+    **反例不进这里**（prompt 铁律一，三次真跑打脸）：不写"不要写 {lkp-x.min}"这类禁止形态——
+    把禁句写进指令，模型会照抄禁句本身（「得一起定」那轮 4/5 主张逐字带它）。禁止形态由
+    :mod:`reportgen_worker.gate` 拦，prompt 只正面给它数据算出来的合法选择。
+    """
+    tier = "【可作支点】" if anchor.presentation == THESIS_SUPPORT else "【未过门·建议口吻】"
+    head = (
+        f"- {anchor.lkp_id}（{anchor.name}，{anchor.unit or '无单位'}）"
+        f"= {json.dumps(anchor.value, ensure_ascii=False)}{tier}"
+    )
+    tokens = item_tokens(anchor)
+    if tokens:
+        return f"{head}\n  这条分 {len(tokens)} 项，各项的记号：" + "、".join(tokens)
+    return f"{head}\n  这条只有一个值，引用写 {{{anchor.lkp_id}}}"
+
+
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     """prompt 拼装（纯函数，可单测）：素材全部来自 release 数据载荷。"""
     banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
@@ -188,9 +216,10 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "「三到五倍」「不低于九十」「七十多厘米」「近半」都要换成占位符；"
         "纪律管的是数不是字形。（列举计数不算：「四个区域」「这三项」可以写）\n"
         "2. 只能引用下方给出的落点对象，不得自造数字或引用不存在的 lkp-。"
-        "**一个占位符代表整条落点**：区间落点渲染出来就是区间（如「亮 3-5 倍」），"
-        "不要拆成 {lkp-x-min}/{lkp-x-max}——那样会丢掉另一端，而上下限往往各管一条纪律"
-        "（下限管够不够，上限管过不过）。句式跟着落点走：区间用「在…之间」「…到…」；"
+        "**每条落点后面都写着它可以怎么引用，照着那个记号写**："
+        "只有一个值的落点写 {lkp-id}，值是区间就整条渲染成区间（如「亮 3-5 倍」），"
+        "句式用「在…之间」「…到…」；分了项的落点（分场景、分档位、分维度、分项）"
+        "已把每一项的记号逐个列出，要说哪一项就写哪一项的记号，一个记号出的就是那一项的值；"
         "**占位符前不要写「不少于/不低于/至少/不超过」这类边界词**——单边界落点渲染出来自带"
         "边界语义（渲染成「不低于 X」），你再写一遍就成了「不少于不低于 750 mm」的叠字，"
         "写「留出 {lkp-x} 的空间」「按 {lkp-x} 做」即可；\n"
@@ -199,7 +228,9 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "不许写成「国标要求」「必须」这类标准口吻——它没有外部依据背书；\n"
         "4. 不许把 lkp- 开头的内部编号写进正文或主旨句——业主不认识这些编号。"
         "要用它的数字就写 {lkp-id} 占位；要说这条没有依据背书，用人话说（如"
-        "「这一项目前只能给参考范围」），不要点名编号；\n"
+        "「这一项目前只能给参考范围」），不要点名编号。"
+        "**记号里点号后面那一段（项名）同样是内部标签**：它只出现在记号里，"
+        "那一项是哪个场合、哪个档位、哪个分项，正文里用人话说；\n"
         f"5. 判断句只允许落在这几个题目上：{backed}。"
         "写了判断句就在 assertions 里声明用的是哪一个；其余题目这轮没有背书，不许下结论；\n"
         f"6. 禁词（一个都不能出现）：{banned}。"
@@ -214,11 +245,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         '"assertions": [声明使用的判断句题目]}，'
         "不要输出数组以外的任何内容。"
     )
-    anchor_lines = [
-        f"- {a.lkp_id}（{a.name}，{a.unit or '无单位'}）= {json.dumps(a.value, ensure_ascii=False)}"
-        + ("【可作支点】" if a.presentation == "THESIS_SUPPORT" else "【未过门·建议口吻】")
-        for a in request.anchors
-    ]
+    anchor_lines = [_anchor_line(a) for a in request.anchors]
     gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in request.gaps]
     user_parts = [
         f"领域：{request.domain}",

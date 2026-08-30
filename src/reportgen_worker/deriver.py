@@ -13,8 +13,15 @@
   是 import-linter 里互不可见的同层兄弟。推导器拿不到判官的判据，也拿不到写作器的语域示范
   （persona 的 ✓ 句可抄性已实测，见 writer.judgment_pairs）——只拿身份、落点题名、断言预算题目。
 
-**推导步看不见落点的值**（:class:`~reportgen_worker.models.AnchorBrief` 只有 id/名字/量纲）：
+**推导步看不见落点的值**（:class:`~reportgen_worker.models.AnchorBrief` 只有 id/名字/量纲/项名）：
 图 v0.2 §3 要求这一步"不产生任何数字"，不给值是让它**结构性地产不出**，而不是叮嘱它别写。
+
+v2.8（规则 1.9 两层模型）加进来的是**项名清单，不是值**：一条落点分几项、分的是哪几项，
+决定的是"这一章讲几件事"——"卧室的灯光和客厅的灯光肯定会不一样"（用户裁决原话）正是这一步的题目。
+不给项名，推导只能把分场景落点当成一件事，拆不拆留给写作步临场决定，而"讲什么"没有环节负责
+恰恰是这一步存在的理由。项名与名字/量纲同类（是标签不是数），故"看不见值"这条**不破**——
+拿着 general/reading 依然产不出任何一个数字。项名逐字进主张的风险由 :func:`parse_claims` 的
+确定性校验兜住（同禁词、耦合词面、条目照抄那三条路径：prompt 里叮嘱无效已实测三次）。
 """
 
 from __future__ import annotations
@@ -106,10 +113,16 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "每条主张挂上它这一组的落点 id（可以挂多条；说取舍不说数的主张也可以一条不挂）；\n"
         "3b. 落点是这一域**已经算出来的**东西，能归进某件事的就别丢在外面——"
         "宁可一条主张多带几个落点，也不要只挑几条讲、剩下的大半不提；\n"
-        "3c. 「这套户型触发的条目」是**这一章必须讲到的点**——每条都要落进某条主张里，"
-        "但**用你自己的话讲**：那些条目是内部写法，逐字搬进主张会被机检打回。"
-        "讲的时候带上它**为什么对这户成立**（条目后面括号里那句就是依据）——"
-        "「因为你家阳台带家政位」这种话才是业主要看的，凭空说「阳台要留清洁位」不是；\n"
+        "3c. 条目分两档，**权重不同**：「这套户型触发的条目」是**这一章必须讲到的点**"
+        "（每条都要落进某条主张里）；「通行做法条目」**可以讲到，但别为它挤掉这一户的事**——"
+        "前者是这户独有的，后者对谁都成立。两档都**用你自己的话讲**："
+        "条目是内部写法，逐字搬进主张会被机检打回。讲户型条目时带上它**为什么对这户成立**"
+        "（条目后面括号里那句就是依据）——「因为你家阳台带家政位」这种话才是业主要看的，"
+        "凭空说「阳台要留清洁位」不是；\n"
+        "3d. 有的落点**分了项**（同一件事的不同场合、档位或分项，清单里逐条标着分几项）——"
+        "这几项是分开讲还是合起来讲**由你定**：对这家人真是两回事（不同场合、不同档位）"
+        "就分成两条主张，是一回事就一条主张里带着。"
+        "项名是内部记号，主张里要用人话说那一项是什么场合、什么档位；\n"
         "4. 能下结论的题目只有这些："
         + backed
         + "；这些题目这轮**没有背书**，只能描述不能下判断："
@@ -134,7 +147,14 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     def anchor_line(a: AnchorBrief) -> str:
         hits = "、".join(f"「{t}」" for t in request.banned_terms if t in a.name)
         note = f"（名字里的 {hits} 是内部词，勿写进主张）" if hits else ""
-        return f"- {a.lkp_id}（{a.name}{'，' + a.unit if a.unit else ''}）{note}"
+        # 分项落点逐行标出**分几项、哪几项**（规则 1.9，v2.8）：拆不拆是这一步的决定，
+        # 不告诉它分了项，它连"可以拆"都不知道。给的是项名不是值——这一步照样产不出数字。
+        items = (
+            f"（分 {len(a.items)} 项：{'、'.join(a.items)}——项名是内部记号，主张里说人话）"
+            if a.items
+            else ""
+        )
+        return f"- {a.lkp_id}（{a.name}{'，' + a.unit if a.unit else ''}）{note}{items}"
 
     anchor_lines = [anchor_line(a) for a in request.anchors]
     user_parts = [
@@ -144,13 +164,23 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         # 值本身就是人话依据（"阳台内有洗衣机设备位"），够推导用且不带内部词面。
         "这套户型（匿名）："
         + ("；".join(request.profile.layout_features.values()) or "（暂无户型信息）"),
-        # 只给题名不给值：这一步不产生数字（图 v0.2 §3），不给值即产不出
-        "本域可用的落点（只有题名，值在下一步）：\n" + "\n".join(anchor_lines),
+        # 只给题名与项名不给值：这一步不产生数字（图 v0.2 §3），不给值即产不出
+        "本域可用的落点（只有题名和分项，值在下一步）：\n" + "\n".join(anchor_lines),
     ]
-    if request.triggered_rules:
+    # 按触发类型分档下发：户型条目是这户独有的（必讲），always 条目是通行做法（可讲）。
+    # 真库实测 always 有 7 条且分布不均（照明 3／用材 2／造价 1／收纳 1），一律"必须讲到"
+    # 等于给收敛最差的章再压三个通用话题——而"通用专业建议"正是这条线要摆脱的东西。
+    by_layout = [r for r in request.triggered_rules if r.triggered_by.evidence]
+    always_rules = [r for r in request.triggered_rules if not r.triggered_by.evidence]
+    if by_layout:
         user_parts.append(
-            "这套户型触发的条目（必须讲到，换成人话讲；括号里是它对这户成立的依据）：\n"
-            + "\n".join(_rule_line(r) for r in request.triggered_rules)
+            "这套户型触发的条目（**必须讲到**，换成人话讲；括号里是它对这户成立的依据）：\n"
+            + "\n".join(_rule_line(r) for r in by_layout)
+        )
+    if always_rules:
+        user_parts.append(
+            "通行做法条目（**可以讲到**，但别为它挤掉这一户的事）：\n"
+            + "\n".join(_rule_line(r) for r in always_rules)
         )
     if request.feedback:
         user_parts.append(
@@ -183,6 +213,7 @@ def parse_claims(
     known_anchor_ids: set[str],
     banned_terms: Sequence[str] = (),
     triggered_rules: Sequence[TriggeredRule] = (),
+    item_names: Sequence[str] = (),
 ) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
@@ -192,6 +223,9 @@ def parse_claims(
 
     空数组是**失败**不是"没什么可讲"：一域有落点却推导不出一件事，说明这一步没工作；
     静默放行会让下一步退回没有主张的老形态，而那正是这一步要修的东西（绝不静默假成功）。
+
+    四道确定性校验（耦合词面、禁词、条目照抄、**项名**）走的是同一条理由：主张逐字进写作
+    prompt，内部词面混进去就会出现在卡片上，而 prompt 里叮嘱压不住已实测三次。
     """
     match = _JSON_BLOCK_RE.search(raw)
     if match is None:
@@ -235,6 +269,24 @@ def parse_claims(
         raise DeriverOutputError(
             f"主张逐字照抄了触发条目 {copied}——那是内部写法，用业主听得懂的话重讲一遍"
         )
+    # 项名同路（规则 1.9 三"项名不进业主视野"，v2.8）：项名从这一版起进推导入参，
+    # 而主张逐字进写作 prompt——内部记号混进去就会出现在卡片上。词边界匹配，
+    # 不误伤 `low-E` 这类正当写法（前后接了字母数字连字符就不算）。
+    claims_text = " ".join(c.claim for c in cleaned)
+    leaked = sorted(
+        {
+            item
+            for item in set(item_names)
+            if re.search(
+                rf"(?<![a-z0-9-]){re.escape(item)}(?![a-z0-9-])", claims_text, re.IGNORECASE
+            )
+        }
+    )
+    if leaked:
+        raise DeriverOutputError(
+            f"主张里写了分项记号 {leaked}——那是内部记号不是说法，"
+            "用人话说那一项是什么场合、什么档位（下一步照抄就会写进卡片）"
+        )
     return cleaned
 
 
@@ -267,4 +319,5 @@ class LlmNarrativeDeriver:
             {a.lkp_id for a in request.anchors},
             request.banned_terms,
             request.triggered_rules,
+            [item for a in request.anchors for item in a.items],
         )
