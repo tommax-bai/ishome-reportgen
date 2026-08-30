@@ -82,34 +82,64 @@ def test_unbacked_topics_get_confession_register() -> None:
     assert "描述现象" not in user  # 旧口径整句退场
 
 
-def test_writer_states_what_the_token_carries_not_a_bound_word_list() -> None:
-    """记号自带的说法**正面下发**，边界词表退场（铁律一：禁止词面永远不进 prompt）。
+def test_slot_says_what_kind_of_value_goes_in_it() -> None:
+    """**在空上给出这个值的特征**（用户裁决 2026-08-30 的前半句），四种各说各的。
 
-    立案＝读者看得见的那句叠字（2026-08-30 灯光章成品逐字：`全屋灯光颜色种类不能多于
-    不超过 3 种 种。`）。旧 prompt 这一条列着「不少于/不低于/至少/不超过」，模型转头写了
-    「不能多于」和「上限」——两个都不在表上。列表躲得开，"这个记号已经把话说完了"躲不开。
-    下发的话由这条落点自己的数据算出来（单位取 unit、边界说法取值的形态），不是模板。
+    形态史：先是禁词表（列「不少于/不低于/至少/不超过」，模型转头写了「不能多于」和「上限」，
+    都不在表上），再是抽象说"自带边界说法"（十二跑九跑复发）。根因是那句中文的语法主干正好
+    落在洞里——它要说一个下限，顺口就是"至少 900"。故边界说法交还给句子，而**空上必须写清
+    这个空是什么**：单位那一半一直是这么给的，十二跑零复发。
     """
     system, user = (m["content"] for m in build_messages(request_for()))
-    assert "一个记号渲出来是完整的说法" in system
-    assert "占位符前不要写" not in system and "不少于" not in system
-    # 单边界（lkp-passage-main = {min: 900}）：单位与边界说法都由记号带出，**两样都逐字**——
-    # 六跑量出来的差别就在这里：逐字给的那一半 0/6 复发，抽象说的那一半 5/6 复发
-    assert (
-        "这个记号渲出来自带单位「mm」、边界说法「不低于…」（这条值只给了一侧），正文写到记号为止"
-        in user
+    assert "每条落点下面写着这个空要填的值是什么特征" in system
+    # 只给下限（主通道净宽 = {min: 900}）：必须写、可用词逐字列出、最顺的排头一个
+    assert "这个空要填的值**只给了下限**" in user
+    assert "「不低于」、「至少」" in user
+    # 固定值（衣柜挂杆高 = 2136）：不许加限定词
+    assert "这个空要填的是一个**确定的数**" in user
+    # 两端都给了的范围（橱柜台面高 = {min,max}）
+    assert "这个空要填的是一个**两端都给了的范围**" in user
+    # 单位一律由记号带出（这一半没变，是另一条裁决）
+    assert "单位「mm」由记号自己带出来" in user
+
+
+def test_multi_item_anchor_describes_both_ways_of_referencing_it() -> None:
+    """整条引用与按项引用是**两个不同的空**，特征不同，必须分开说。
+
+    淋浴净尺寸的宽/深各只给下限：整条引用时一个记号并列两项，句子够不着里面的每一项，
+    边界说法由渲染层带；按项引用时只渲一个值，句子够得着，就必须自己写清。
+    只说前一种，模型按项引用时会照着一句对不上的话写，然后被打回——而重写只有两轮。
+    """
+    raw = copy.deepcopy(PACKAGE_JSON)
+    raw["anchors"].append(
+        {
+            "lkpId": "lkp-shower-clear",
+            "name": "淋浴区净尺寸",
+            "numberClass": "selection",
+            "unit": "mm",
+            "valueKind": "dimension",
+            "value": {"width": {"min": 800}, "depth": {"min": 800}},
+            "basisTag": "ergonomics@v1",
+            "source": "行业通行",
+            "calibration": "draft",
+            "degraded": True,
+            "presentation": "REFERENCE_ONLY",
+        }
     )
-    # 两端齐的区间（lkp-counter-height = {min,max}）：只带单位——它没有那层边界语义
-    assert "这个记号渲出来自带单位「mm」，正文写到记号为止" in user
+    request = request_for()
+    request.anchors = ReportDataPackage.model_validate(raw).domain_anchors(DOMAIN)
+    user = build_messages(request)[1]["content"]
+    assert "整条引用时，记号会把每一项的边界说法一起带出来" in user
+    assert "按项引用 {lkp-shower-clear.width}、{lkp-shower-clear.depth} 时出的是裸的数" in user
+    assert "那一项**只给了下限**" in user
 
 
-def test_anchor_line_calls_out_a_bound_word_inside_the_anchor_name() -> None:
-    """边界词就藏在落点自己的题名里（坑单第 4 条同型，改后首轮真跑逮到）。
+def test_slot_note_flags_a_bound_word_hiding_in_the_anchor_name() -> None:
+    """边界词就藏在落点自己的题名里（坑单第 4 条同型，真跑逮到）。
 
-    `lkp-cct-variety-max` 的题名是「全屋色温种类上限」，模型把「上限」从题名搬进正文
-    （真跑逐字：`全屋能用的灯光颜色种类上限是 {lkp-cct-variety-max}`），两轮重写没改掉——
-    它抄的不是禁词表，是**眼前这条落点的名字**。处置沿用既有那条：撞词的落点逐行点名，
-    并给出接得上的写法；题名不改（「上限」在题名里是准确的，改说法不改数据）。
+    题名「全屋色温种类上限」——模型把「上限」从题名搬进正文，两轮重写没改掉。题名不改
+    （「上限」在题名里是准确的，改说法不改数据），改的是**在它那一行点名**：题名照抄未必
+    对得上这个空的特征。
     """
     raw = copy.deepcopy(PACKAGE_JSON)
     raw["anchors"].append(
@@ -131,8 +161,8 @@ def test_anchor_line_calls_out_a_bound_word_inside_the_anchor_name() -> None:
     request = request_for()
     request.anchors = package.domain_anchors(DOMAIN)
     user = build_messages(request)[1]["content"]
+    assert "这个空要填的值**只给了上限**" in user
     assert "这条的题名里带着「上限」" in user
-    assert "写「…{lkp-cct-variety-max}。」直接接上去就行" in user
 
 
 def test_unbacked_anchor_enters_prompt() -> None:

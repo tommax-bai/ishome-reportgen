@@ -95,32 +95,57 @@ _NO_ANCHOR_ROUTE = (
     "一条都没有，就把这句话改成不带数的说法——禁的是没有背书的数，不是禁止说这件事"
 )
 
-# 记号旁边的措辞（2026-08-30 立案，**当时唯一读者可见的成品缺陷**）：一个记号渲出来是**完整的
-# 说法**——值 + 单位，值只给一侧时还自带边界措辞（用户裁决 2026-08-29 晚：边界语义在值里、
-# 措辞由渲染层按值形态出）。正文在记号前后再写一遍，成品逐字就是叠字：
+# 记号旁边的措辞：**在输入的地方给出这个空要填的值的特征，检测时检测内容合不合这个特征**
+# （用户裁决 2026-08-30）。特征四种，各配一句要求与一道机检：
 #
-#     全屋灯光颜色种类不能多于 不超过 3 种 种。      ← 边界词与单位各叠一次
+#   固定值        记号出的就是这个数        前面不许加边界词（加了＝编一个数据里没有的关系）
+#   只有下限      记号出裸数                句子里必须写下限那一族的词
+#   只有上限      记号出裸数                句子里必须写上限那一族的词
+#   两端齐的区间  记号出"900–950"           不许加单侧边界词
+#   （并列多项）  记号自带逐项说法          句子不写——见下"句子够不够得着"
 #
-# 判据从 release 数据挪进代码（原 cr-bound-word-before-placeholder 已 retire，语义由这里承接）：
-#   ① **两半是同一条纪律**，判它们要同一份口径——单位那一半根本不可能写成 pattern
-#      （得逐字比对这条落点自己的 unit，那只有数据包知道），两半分居两处即"同一条规则两处各
-#      写一遍"（坑单第 10 条同型），改一处必忘一处。
-#   ② 词表放在 release 数据里没救活它：原 pattern 靠**固定词表 + 紧邻占位符**匹配，立案的两句
-#      **都漏了**——「不能多于」不在表里、「上限」根本不是它认的边界词。词面枚举是这条判据的
-#      形态错误，不是词表不够长。
-# 词表因此收成**词根**（"少于"覆盖"不少于/不能少于"、"超过"覆盖"不超过"），并按**小句**取范围：
-# 隔着几个字的边界词照样是同一句话里的边界词，逗号之外的则是另一句，不算（不设"隔几个字"的
-# 距离阈值——阈值要有数据才定，而立案的两句都紧邻）。
-# **只收直接说量的边界**：形容词性最高级（最大/最高/最低）不收，它们更多是在修饰名词
-# （"全屋最高的那面墙旁边放 {lkp-x}"），收了就是过拦，而过拦与漏拦同样是失效；后置的
-# "以内/以下"同理暂不收。触发条件写死：**这两类在真跑成品里出现一次，就按那条真样本补进词根表**
-# （反例只收真跑样本，不靠想象扩表）。
-BOUND_WORD_RE = re.compile(
-    "少于|多于|大于|小于|低于|高于|超过|至少|最少|至多|最多|起码|上限|下限|封顶"
-)
+# **为什么改成这样**（原先是渲染层把"不超过"一起渲出来、写手一律不许写边界词）：写手那句话的
+# 语法主干正好落在洞里，十二跑里九跑它照样自己写了一遍，成品叠字
+# `全屋灯光颜色种类不能多于 不超过 3 种 种。`。而它写的方向 16/17 是对的——**能力不是问题，
+# 可核性才是**：边界词写错只是话错、数还是那个数，且验它是个是非题（数据里写着只有上界，
+# 句子里就得有上界那一族的词）。**单位不这么办**：单位写错会改掉数的大小，且数据里的单位是
+# "mm/Ra/×环境照度"这种内部写法、与人话逐字对不上，验不动——故单位仍由渲染层随值出
+# （用户裁决 2026-08-30），记号后面再补一遍单位仍是违规。
+#
+# **句子够不够得着**是唯一的分界：一个记号只渲一个值时，写手的句子就在它旁边，边界说法归句子；
+# 一个记号并列多项时（如淋浴净尺寸的宽/深各只给下限），句子够不着里面的每一项，仍由渲染层
+# 逐项带上。表格与图框将来同理——那里"旁边"指列头，届时各配各的机检（触发条件：清单页族落地）。
+#
+# 词表是**正面清单**（"必须从这几个词里挑"），不是禁止清单。方向按**词族**分，正说反说归同一族：
+#   下限一族  不低于 90（正说）／低于 90 就偏暗（反说）——两句都在说这条下限
+#   上限一族  不超过 3（正说）／超过 3 就杂（反说）
+# 表外的词按"没写"处理并把可选词逐字列出来——**正面清单漏一个词只多烧一轮重写，禁止清单漏一个
+# 词缺陷就进成品**（今天上午那句叠字正是后者的产物）。失败方向不对称，故选前者。
+BOUND_ROOTS_BY_SIDE = {
+    "min": ("不低于", "至少", "不少于", "低于", "少于", "不小于", "小于", "最少", "起码", "下限"),
+    "max": (
+        "不超过",
+        "最多",
+        "不多于",
+        "超过",
+        "多于",
+        "不高于",
+        "高于",
+        "不大于",
+        "大于",
+        "至多",
+        "上限",
+        "封顶",
+    ),
+}
+"""每一侧可用的边界词，**表内第一个是最顺的说法**（打回话按这个顺序列给模型）。"""
+_BOUND_SIDE_BY_ROOT = {root: side for side, roots in BOUND_ROOTS_BY_SIDE.items() for root in roots}
+# 匹配按词根，长的优先（"不低于" 先于 "低于"，报出来的词面才是模型真写的那个）
+BOUND_WORD_RE = re.compile("|".join(sorted(_BOUND_SIDE_BY_ROOT, key=len, reverse=True)))
 _CLAUSE_TAIL_RE = re.compile(r"[^，。；：！？、\n!?,;:]*$")
 """记号所在的那个小句（自最近一个断句符之后）——判据的取值范围。"""
 _BOUND_KEYS = frozenset({"min", "max"})
+BOUND_SIDE_NAME = {"min": "下限", "max": "上限"}
 
 # persona 判断句样例（规则 4.13 之②）进 prompt 后的真跑副作用（2026-08-28）：模型把 ✓ 示范句
 # **逐字抄进卡片**当成这家人的结论——示范是"怎么讲"的样本，不是"讲什么"的素材，抄过去就成了
@@ -415,12 +440,20 @@ def _item_name_violations(anchor: ReportAnchor) -> list[Violation]:
 _RENDER_BOUND_PHRASE = {"min": "不低于", "max": "不超过"}
 
 
-def bound_phrases(anchor: ReportAnchor, item_name: str | None = None) -> list[str]:
-    """这个记号渲出来自带哪些边界措辞（**值只给了一侧**时才有），按出现顺序去重。
+BOUND_REQUIRED = "required"
+"""这个记号只渲一个"只有一侧"的值：句子必须写方向正确的边界词。"""
+BOUND_CARRIED = "carried"
+"""这个记号并列多项、其中有"只有一侧"的：渲染层逐项带词，句子不写。"""
+BOUND_ABSENT = "absent"
+"""固定值或两端齐的区间：数据里没有单侧边界这层意思，句子不许写。"""
 
-    整条引用看它的全部项（分维度落点每一项各带一次），单项引用只看那一项。
-    写作侧与门禁侧共用这一份判定：prompt 据它逐字告诉模型记号自带什么
-    （:func:`reportgen_worker.writer._wording_note`），门禁据它说清打回话，两处不会各判各的。
+
+def bound_expectation(anchor: ReportAnchor, item_name: str | None = None) -> tuple[str, str | None]:
+    """这个记号要填的值是什么特征 → （该不该写边界词，写哪一侧）。
+
+    **写作侧与门禁侧共用这一份判定**：prompt 按它在每个空旁边写出特征
+    （:func:`reportgen_worker.writer._wording_note`），门禁按它判内容合不合特征——
+    用户裁决 2026-08-30 的原话就是这两句，故只能有一份实现。
     """
     value = anchor.value
     if item_name is not None:
@@ -429,34 +462,39 @@ def bound_phrases(anchor: ReportAnchor, item_name: str | None = None) -> list[st
         values = list(value.values()) if isinstance(value, dict) else []
     else:
         values = [value]
-    phrases: list[str] = []
-    for v in values:
-        if not isinstance(v, dict) or len(v) != 1 or not set(v) <= _BOUND_KEYS:
-            continue
-        phrase = _RENDER_BOUND_PHRASE[next(iter(v))]
-        if phrase not in phrases:
-            phrases.append(phrase)
-    return phrases
+
+    def one_sided(v: object) -> str | None:
+        if isinstance(v, dict) and len(v) == 1 and set(v) <= _BOUND_KEYS:
+            return str(next(iter(v)))
+        return None
+
+    if len(values) == 1:
+        side = one_sided(values[0])
+        return (BOUND_REQUIRED, side) if side else (BOUND_ABSENT, None)
+    # 并列多项：只要有一项只给了一侧，这个记号渲出来就自带说法（句子够不着逐项）
+    if any(one_sided(v) for v in values):
+        return BOUND_CARRIED, None
+    return BOUND_ABSENT, None
 
 
-def renders_bound_phrase(anchor: ReportAnchor, item_name: str | None = None) -> bool:
-    """这个记号渲出来带不带边界措辞。"""
-    return bool(bound_phrases(anchor, item_name))
+def _bound_choices(side: str) -> str:
+    return "、".join(f"「{root}」" for root in BOUND_ROOTS_BY_SIDE[side])
 
 
 def _adjacent_wording_violations(
     label: str, text: str, anchors_by_id: dict[str, ReportAnchor]
 ) -> list[Violation]:
-    """记号前后的措辞替渲染层把话说了（立案与判据形态见 :data:`BOUND_WORD_RE` 上方）。
+    """记号旁边的措辞合不合这个空的特征（四种特征与词表见 :data:`BOUND_ROOTS_BY_SIDE` 上方）。
 
-    **分两条判据不并一条**：语义不同——一条判记号前的边界词，一条判记号后的单位，
-    判据名字与语义必须一致（同 ``gate-lkp-identifier-leak`` 与 ``gate-item-name-leak`` 的分法）。
-    两条的打回话以同一句收尾，那句才是纪律本身：**记号渲出来是完整的说法，正文写到记号为止**。
+    **判据按"哪里不对"分条，不按"哪个记号"分条**：该写没写、写反了方向、不该写却写了，
+    三种的改法各不相同，合成一条就等于给模型一句它得自己拆开的话
+    （判据名字与语义必须一致，同 ``gate-lkp-identifier-leak`` 与 ``gate-item-name-leak`` 的分法）。
+    单位那一条独立：单位永远由渲染层随值出，与边界词的归属无关。
 
     按**出现位置**扫原文，不走 :func:`placeholder_refs` 那套集合：判的就是记号前后那几个字，
     去重即丢位置。打回话把**那一小句原文逐字带上**——同一个记号在一张卡里可以错两处
-    （立案那张卡就是：主旨句里"不能多于"、正文里"上限"），只报一条的话模型改完第一处
-    第二处还在，而重写只有两轮。逐字相同的两处才合并（那是同一个错的两遍）。
+    （立案那张卡就是：主旨句里一处、正文里一处），只报一条的话模型改完第一处第二处还在，
+    而重写只有两轮。逐字相同的两处才合并（那是同一个错的两遍）。
     """
     violations: list[Violation] = []
     seen: set[str] = set()
@@ -473,22 +511,46 @@ def _adjacent_wording_violations(
         token, unit = match.group(0), anchor.unit
         clause_match = _CLAUSE_TAIL_RE.search(text[: match.start()])
         clause = clause_match.group(0) if clause_match else ""
-        bound = BOUND_WORD_RE.search(clause)
-        if bound is not None:
+        written = BOUND_WORD_RE.search(clause)
+        kind, side = bound_expectation(anchor, match.group(2))
+
+        if kind == BOUND_REQUIRED:
+            assert side is not None
+            if written is None:
+                _add(
+                    "gate-bound-word-missing",
+                    f"{label} 「{clause}{token}」这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**，"
+                    f"记号出来是裸的数（带单位），句子里必须写清这是{BOUND_SIDE_NAME[side]}——"
+                    f"从这几个词里挑一个放在记号前面：{_bound_choices(side)}。"
+                    "不写的话业主会把它读成「刚好就是这个数」",
+                )
+            elif _BOUND_SIDE_BY_ROOT[written.group(0)] != side:
+                other = BOUND_SIDE_NAME["min" if side == "max" else "max"]
+                _add(
+                    "gate-bound-word-direction",
+                    f"{label} 「{clause}{token}」写的是「{written.group(0)}」（{other}的说法），"
+                    f"而这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**——方向反了，"
+                    f"意思正好说拧。改成这几个之一：{_bound_choices(side)}",
+                )
+        elif written is not None:
+            why = (
+                "这个记号并列了好几项，每一项的边界说法它自己会带上，你再写一遍就是叠字"
+                if kind == BOUND_CARRIED
+                else "这个空要填的是一个**确定的数**（或一个两端都给了的范围），"
+                "数据里根本没有单侧边界这层意思，写了等于替数据下一个它没给的判断"
+            )
             _add(
                 "gate-bound-word-before-ref",
-                f"{label} 「{clause}{token}」记号前写了边界词「{bound.group(0)}」——"
-                "边界说法归渲染层：值只给一侧时记号自己会带上它，而点值与两端齐的区间"
-                "压根没有这层语义，写了等于替数据下一个它没给的判断。"
-                f"删掉这个词即可（「按 {token} 做」「留出 {token} 的空间」）："
-                "记号渲出来是完整的说法，正文写到记号为止",
+                f"{label} 「{clause}{token}」记号前写了边界词「{written.group(0)}」——{why}。"
+                f"删掉这个词即可（「按 {token} 做」「留出 {token} 的空间」）",
             )
+
         if unit and text[match.end() :].lstrip(" \u3000\t").startswith(unit):
             _add(
                 "gate-unit-after-ref",
                 f"{label} 「{token} {unit}」记号后又写了一遍单位「{unit}」——"
-                "这条落点的单位由记号自己带出来，删掉记号后面那个单位即可："
-                "记号渲出来是完整的说法，正文写到记号为止",
+                "单位由记号自己带出来（写错单位会改掉这个数的大小，故它不交给你写），"
+                "删掉记号后面那个单位即可",
             )
     return violations
 

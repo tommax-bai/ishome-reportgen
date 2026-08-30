@@ -34,12 +34,16 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from reportgen_worker.gate import (
     BARE_LKP_RE,
+    BOUND_CARRIED,
+    BOUND_REQUIRED,
+    BOUND_ROOTS_BY_SIDE,
+    BOUND_SIDE_NAME,
     BOUND_WORD_RE,
     CHINESE_NUMBER_RE,
     DIGIT_RE,
     PLACEHOLDER_RE,
     THESIS_SUPPORT,
-    bound_phrases,
+    bound_expectation,
     item_tokens,
 )
 from reportgen_worker.models import (
@@ -161,50 +165,74 @@ def judgment_pairs(
 
 
 def _wording_note(anchor: ReportAnchor) -> str:
-    """这个记号渲出来**自己带了什么**：单位，以及值只给一侧时的边界说法。
+    """**这个空要填的值是什么特征**，写在记号旁边（用户裁决 2026-08-30 的前半句）。
 
-    立案是读者看得见的那句叠字（2026-08-30 灯光章成品逐字：`全屋灯光颜色种类不能多于
-    不超过 3 种 种。`）。改法只有正面这一条能用：**禁止词面不进 prompt**（铁律一，三次真跑
-    打脸）——原先这里写的是"占位符前不要写「不少于/不低于/至少/不超过」这类边界词"，
-    模型转头写了「不能多于」和「上限」，两个都不在那张表上。列禁词等于给模型一张躲得开的表，
-    而它需要的是知道**记号已经把这句话说完了**。
+    四种特征各说一句：固定值（不许加限定词）／只给下限、只给上限（必须写那一族的词，可用词
+    逐字列出）／两端齐的区间（不许加单侧词）；再加并列多项那一种（记号自带，不用写）。单位永远
+    由记号带出，故另说一句。**后半句"检测时检测内容合不合这个特征"由
+    :func:`reportgen_worker.gate._adjacent_wording_violations` 执行，两边共用
+    :func:`reportgen_worker.gate.bound_expectation` 一份判定**——说的和拦的不会是两回事。
 
-    话由数据算出来（单位取自这条落点自己的 ``unit``，边界说法取自值的形态），不是模板：
-    与门禁共用 :func:`reportgen_worker.gate.bound_phrases` 一份判定，
-    prompt 说的和 gate 拦的不会是两回事。
+    立案与形态变更史：原先渲染层把"不超过"一起渲出来、写手一律不许写边界词，结果成品叠字
+    （`全屋灯光颜色种类不能多于 不超过 3 种 种。`）。改成禁词表不管用——列了「不少于/不低于/
+    至少/不超过」，模型转头写了「不能多于」和「上限」，都不在表上；改成抽象说"自带边界说法"
+    也不管用，十二跑九跑复发。**根因是那句中文的语法主干正好落在洞里**：写手要说一个上界，
+    顺口的说法就是"最多 3 种"，我们却要求它写"…种类▢。"。故边界说法交还给句子，
+    而"这个空是什么"必须摆在空上——单位那一半正是这么给的，十二跑零复发。
 
-    **两半都逐字给**：抽象说"自带边界说法"时，lighting 六跑里边界那一半复发 5/6，而同一段话里
-    单位是逐字给的（「单位「种」」）、复发 0/6。改成逐字后再六跑：边界 4/6、单位仍 0/6——
-    **两档差别读不出来**（每格 6 跑量不出这个量级，同 persona 示范块 A/B 的既有口径），
-    别拿它当"逐字有效"的证据；留逐字形态的理由是与门禁同口径，不是过检率。
-    真正读得出来的是另一件事：单位十二跑一次没复发，边界九跑中——机制不是模型不守纪律，是
-    **它想写的那句中文里天然带边界词**（"显色指数不低于 90"），处置待裁，见
-    `_iteration/run-2026-08-30-wording-around-ref.md` §四。
-    铁律一（禁止词面不进 prompt）在这里不适用：给的不是"不许写的词"，是**这个记号已经说了的
-    话**——单位那一半正是这么给的，十二跑一次没被抄进正文。
-
-    **第二句是"边界词就藏在落点自己的名字里"**（坑单第 4 条的同一形态，改后首轮真跑逮到）：
-    `lkp-cct-variety-max` 的题名是「全屋色温种类上限」，模型把名字里的「上限」搬进了正文
-    （`全屋能用的灯光颜色种类上限是 {lkp-cct-variety-max}`），两轮重写没改掉。处置沿用既有那条：
-    **撞词的落点在 prompt 里逐行点名**（数据驱动 = 词根表 ∩ 题名），并给出接得上的写法——
-    改说法不改数据，题名里的「上限」是准确的，不能为它改题名。
+    **反例仍然不进 prompt**（铁律一）：这里给的是"必须从这几个词里挑一个"的**正面清单**，
+    不是"不许写哪些词"。两者失败方向不同：正面清单漏一个词只多烧一轮重写，禁止清单漏一个词
+    缺陷就进成品。
     """
     parts = []
-    carried = []
+
+    def _choices(side: str) -> str:
+        return "、".join(f"「{root}」" for root in BOUND_ROOTS_BY_SIDE[side])
+
+    kind, side = bound_expectation(anchor)
+    if not anchor.has_items:
+        if kind == BOUND_REQUIRED:
+            assert side is not None
+            parts.append(
+                f"这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**，记号出来是裸的数（带单位）——"
+                f"句子里必须写清这是{BOUND_SIDE_NAME[side]}，从这几个词里挑一个放在记号前面："
+                f"{_choices(side)}"
+            )
+        elif isinstance(anchor.value, dict):
+            parts.append("这个空要填的是一个**两端都给了的范围**，写「在…到…之间」，别加单侧限定词")
+        else:
+            parts.append(
+                "这个空要填的是一个**确定的数**，前面别加「不低于」「最多」这类限定词——"
+                "数据里没有那层意思，加了就是替它下一个它没给的判断"
+            )
+    else:
+        # 分项落点：整条引用与按项引用是**两个不同的空**，特征也不同，必须分开说——
+        # 只说整条那一种，模型按项引用时会照着一句对不上的话写，然后被打回。
+        if kind == BOUND_CARRIED:
+            parts.append("整条引用时，记号会把每一项的边界说法一起带出来，你不用也不要再写")
+        else:
+            parts.append("整条引用时，各项都是给定的数值，前面别加「不低于」「最多」这类单侧限定词")
+        by_side: dict[str, list[str]] = {}
+        for name in anchor.item_names:
+            item_kind, item_side = bound_expectation(anchor, name)
+            if item_kind == BOUND_REQUIRED and item_side is not None:
+                by_side.setdefault(item_side, []).append(name)
+        for item_side, names in by_side.items():
+            tokens = "、".join(f"{{{anchor.lkp_id}.{n}}}" for n in names)
+            parts.append(
+                f"按项引用 {tokens} 时出的是裸的数，那一项**只给了"
+                f"{BOUND_SIDE_NAME[item_side]}**，句子里必须写清：{_choices(item_side)}"
+            )
+
     if anchor.unit:
-        carried.append(f"单位「{anchor.unit}」")
-    phrases = bound_phrases(anchor)
-    if phrases:
-        carried.append("边界说法「" + "／".join(phrases) + "…」（这条值只给了一侧）")
-    if carried:
-        parts.append("这个记号渲出来自带" + "、".join(carried) + "，正文写到记号为止，前后不用再补")
+        parts.append(f"单位「{anchor.unit}」由记号自己带出来，正文里不用也不要再写一遍")
     collision = BOUND_WORD_RE.search(anchor.name)
     if collision is not None:
         parts.append(
-            f"这条的题名里带着「{collision.group(0)}」——题名是内部标签，不是要你照抄的说法，"
-            f"那层意思记号自己会说：写「…{{{anchor.lkp_id}}}。」直接接上去就行"
+            f"这条的题名里带着「{collision.group(0)}」——题名是内部标签，照抄它未必对上这个空的"
+            "特征，按上面那条写"
         )
-    return "\n  " + "；".join(parts) if parts else ""
+    return "\n  " + "；".join(parts)
 
 
 def _anchor_line(anchor: ReportAnchor) -> str:
@@ -271,9 +299,9 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "只有一个值的落点写 {lkp-id}，值是区间就整条渲染成区间（如「亮 3-5 倍」），"
         "句式用「在…之间」「…到…」；分了项的落点（分场景、分档位、分维度、分项）"
         "已把每一项的记号逐个列出，要说哪一项就写哪一项的记号，一个记号出的就是那一项的值；"
-        "**一个记号渲出来是完整的说法**——每条落点下面写着它自带什么（单位、值只给一侧时的"
-        "边界说法），那些正文里不用也不要再写一遍：写「留出 {lkp-x} 的空间」「按 {lkp-x} 做」，"
-        "写到记号为止；\n"
+        "**每条落点下面写着这个空要填的值是什么特征**（是一个确定的数、还是只给了上限/下限、"
+        "还是一个范围），照那句话写：只给一侧的必须在记号前面写清是上限还是下限（可用的词逐字"
+        "列在那里），是确定的数就别加限定词；**单位一律由记号自己带出来，正文里不要再写一遍**；\n"
         "3. 落点分两档：标【可作支点】的可以拿来下判断；标【未过门·建议口吻】的照常用，"
         "**主旨句里也可以出现**，但语域限「我们建议…」「按行业通行做法…」，"
         "不许写成「国标要求」「必须」这类标准口吻——它没有外部依据背书；\n"
