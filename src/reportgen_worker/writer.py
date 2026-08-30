@@ -78,6 +78,13 @@ class WriterRequest(BaseModel):
     backed_predicates: list[str] = []
     unbacked_predicates: list[str] = []
     feedback: list[Violation] = []
+    previous_cards: list[Card] = []
+    """上一稿的卡片，原样带回（用户裁决 2026-08-30）。
+
+    在此之前重写只递一张违规清单，**上一稿本身不回传**——等于让它"逐条修正"一份它已经看不见的
+    稿子，它实际是从头再写一章、只是被告知上次踩了哪些坑。真跑症状对得上：违规在卡片之间跳
+    （这一轮 card[3]、下一轮 card[4]），同一条错两轮都在。带回原稿后，打回从"重写一章并避开这些
+    坑"变成"这张卡这一句改掉"。"""
     attempt: int = 0
 
 
@@ -260,6 +267,43 @@ def _anchor_line(anchor: ReportAnchor) -> str:
     return head + ref + _wording_note(anchor)
 
 
+_CARD_INDEX_RE = re.compile(r"^card\[(\d+)\]\s*")
+
+
+def _rewrite_part(request: WriterRequest) -> str:
+    """打回段：上一稿原样 + 每条违规**挂在它指的那张卡上**（用户裁决 2026-08-30）。
+
+    违规的 detail 以 ``card[i]`` 开头（:mod:`reportgen_worker.gate` 的既有形态），据此归位；
+    归不到某张卡的（整稿级的，如卡片数多于主张）单列。归位是这一段的要害：一张清单摊在稿子外面，
+    模型得自己数到第几张；挂在卡下面，它看到的就是"这一张的这一句要改"。
+    """
+    by_card: dict[int, list[str]] = {}
+    loose: list[str] = []
+    for violation in request.feedback:
+        match = _CARD_INDEX_RE.match(violation.detail)
+        line = f"    ✗ [{violation.check}] {_CARD_INDEX_RE.sub('', violation.detail)}"
+        if match:
+            by_card.setdefault(int(match.group(1)), []).append(line)
+        else:
+            loose.append(f"  ✗ [{violation.check}] {violation.detail}")
+
+    if not request.previous_cards:
+        return f"上一稿（第 {request.attempt} 稿）被机检打回，逐条修正：\n" + "\n".join(
+            f"- [{v.check}] {v.detail}" for v in request.feedback
+        )
+
+    lines = [
+        f"上一稿（第 {request.attempt} 稿）被机检打回。原稿在下面，"
+        "**只改被 ✗ 点到的地方，没被点到的卡片原样抄回**（改动越少越好）："
+    ]
+    lines.extend(loose)
+    for index, card in enumerate(request.previous_cards):
+        lines.append(f"[{index}] 主旨：{card.thesis}")
+        lines.append(f"    正文：{card.body}")
+        lines.extend(by_card.get(index, []))
+    return "\n".join(lines)
+
+
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     """prompt 拼装（纯函数，可单测）：素材全部来自 release 数据载荷。"""
     banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
@@ -359,10 +403,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
             "本次求不出的落点（不要硬写，可坦白留待现场确认）：\n" + "\n".join(gap_lines)
         )
     if request.feedback:
-        user_parts.append(
-            f"上一稿（第 {request.attempt} 稿）被机检打回，逐条修正：\n"
-            + "\n".join(f"- [{v.check}] {v.detail}" for v in request.feedback)
-        )
+        user_parts.append(_rewrite_part(request))
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": "\n\n".join(user_parts)},

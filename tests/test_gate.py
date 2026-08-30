@@ -190,8 +190,10 @@ def test_bound_word_required_when_the_value_gives_one_side_only() -> None:
     )
     violations = run_unit_gate([card], "ergonomics", package)
     missing = [v for v in violations if v.check == "gate-bound-word-missing"]
-    assert missing and "只给了上限" in missing[0].detail
-    assert "「不超过」" in missing[0].detail  # 可用词逐字列出，且最顺的排头一个
+    # 打回三件：原文片段、哪儿不对、怎么改——且短（用户裁决 2026-08-30）
+    assert missing and "缺上限说法" in missing[0].detail
+    assert "不超过／最多／不多于" in missing[0].detail  # 只给最顺的三个，机检仍认全表
+    assert len(missing[0].detail) < 60
 
 
 def test_bound_word_direction_must_match_the_side() -> None:
@@ -229,7 +231,7 @@ def test_bound_word_forbidden_on_a_fixed_value() -> None:
     )
     violations = run_unit_gate([card], "ergonomics", PACKAGE)
     hit = [v for v in violations if v.check == "gate-bound-word-before-ref"]
-    assert hit and "确定的数" in hit[0].detail
+    assert hit and "这个数没有单侧边界" in hit[0].detail
 
 
 def test_bound_word_forbidden_when_one_token_lists_several_items() -> None:
@@ -247,7 +249,7 @@ def test_bound_word_forbidden_when_one_token_lists_several_items() -> None:
         for v in run_unit_gate([card], "ergonomics", package)
         if v.check == "gate-bound-word-before-ref"
     ]
-    assert hit and "并列了好几项" in hit[0].detail
+    assert hit and "记号并列多项" in hit[0].detail
 
 
 def test_the_filed_sentence_now_fails_only_on_the_unit() -> None:
@@ -783,7 +785,7 @@ def test_declaring_one_item_and_writing_another_is_still_fake_confession() -> No
 
     assert len(unused) == 1
     assert "lkp-probe.reading" in unused[0].detail
-    assert "禁止的隐藏" in unused[0].detail
+    assert "不许说「给不出」" in unused[0].detail
 
 
 def test_item_written_with_a_hyphen_gets_the_dot_form_in_the_hint() -> None:

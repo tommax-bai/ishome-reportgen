@@ -14,7 +14,7 @@ from reportgen_worker.gate import (
     run_unit_gate,
     unbacked_predicates,
 )
-from reportgen_worker.models import Card, PersonaAsset, ReportDataPackage
+from reportgen_worker.models import Card, PersonaAsset, ReportDataPackage, Violation
 from reportgen_worker.writer import WriterRequest, build_messages, judgment_pairs
 from tests.support import PACKAGE_JSON, load_package
 
@@ -80,6 +80,44 @@ def test_unbacked_topics_get_confession_register() -> None:
     assert "只许坦白" in user
     assert "不要编原因" in user
     assert "描述现象" not in user  # 旧口径整句退场
+
+
+def test_rewrite_carries_the_previous_draft_with_violations_pinned_to_cards() -> None:
+    """重写时把上一稿原样带回，违规**挂在它指的那张卡下面**（用户裁决 2026-08-30）。
+
+    在此之前只递一张违规清单、原稿不回传——等于让模型"逐条修正"一份它已经看不见的稿子，
+    它实际是从头再写一章。真跑症状对得上：违规在卡片之间跳、同一条错两轮都在。
+    """
+    request = request_for()
+    request.attempt = 1
+    request.previous_cards = [
+        Card(
+            thesis="主通道要走得开。",
+            body="留出 {lkp-passage-main} 就够两个人错身。",
+            number_refs=[],
+        ),
+        Card(thesis="台面按人定。", body="切菜时手腕是平的。", number_refs=[]),
+    ]
+    request.feedback = [
+        Violation(
+            check="gate-bound-word-missing",
+            detail="card[0] 「留出 {lkp-passage-main}」缺下限说法 → 记号前加不低于／至少之一",
+        ),
+        Violation(
+            check="gate-cards-exceed-claims",
+            detail="3 张卡多于 2 条主张 → 一件事一张卡，删掉多出来的",
+        ),
+    ]
+    user = build_messages(request)[1]["content"]
+    assert "只改被 ✗ 点到的地方，没被点到的卡片原样抄回" in user
+    assert "[0] 主旨：主通道要走得开。" in user
+    assert "[1] 主旨：台面按人定。" in user
+    # 挂位：卡片级的违规跟在它那张卡下面，整稿级的单列在最前
+    body_at, violation_at = user.index("[0] 主旨"), user.index("缺下限说法")
+    assert body_at < violation_at < user.index("[1] 主旨")
+    assert user.index("3 张卡多于 2 条主张") < body_at
+    # card[i] 前缀已归位，不再重复出现在挂到卡下面的那一条里
+    assert "card[0]" not in user
 
 
 def test_slot_says_what_kind_of_value_goes_in_it() -> None:

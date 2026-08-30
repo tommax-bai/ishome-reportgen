@@ -86,14 +86,30 @@ CHINESE_NUMBER_RE = re.compile(
 THESIS_SUPPORT = "THESIS_SUPPORT"
 CALIBRATED = "calibrated"
 
+# 打回话的形态（用户裁决 2026-08-30）：**每一处打回都要带上被打回的原文与原因**，
+# 且**简洁**——"避免给重写的模型造成过多负担"。射程是所有裁判场（规则层这一份、判官层那一份
+# 已经是 `判官命中「原句」：为什么` 的形态）。三件按序写死，多一个字都不加：
+#
+#     「原文片段」 + 哪儿不对 + → 怎么改
+#
+# 为什么原文非带不可：重写时模型看得见上一稿（同批裁决），但一张摊在稿子外面的清单还是要它
+# 自己去数第几张卡、第几句话。带上原文，打回就落在那一句上。
+# 为什么必须短：打回话逐字进下一稿的 prompt，说理和背景在那里只是噪音——真跑里最长的一条
+# 打回话有 150 字，其中 120 字是在解释这条纪律为什么存在。
+_QUOTE_MAX = 18
+
+
+def cite(fragment: str) -> str:
+    """打回里引用的原文：够定位就行，不整句搬。"""
+    text = fragment.strip()
+    return f"…{text[-_QUOTE_MAX:]}" if len(text) > _QUOTE_MAX else text
+
+
 # 打回话只有在"照做得到"时才是打回，否则是把重写轮数烧掉（坑单第 19 条）。两条写数判据原先
 # 只说"换 {lkp-*} 占位"，而立案样本 `gate-chinese-numeral`「半小时」在本域**根本没有对应落点**——
 # 模型照这句话做不到，两轮重写全烧在这一条上（2026-08-30 灯光章真跑，verdict=failed 的唯一违规）。
 # 补的是**第二条出路**：禁的是没有背书的数，不是禁止说这件事，说不带数的说法照样成立。
-_NO_ANCHOR_ROUTE = (
-    "。两条路选一条：上面的落点清单里有能背书这个数的，就写它的记号；"
-    "一条都没有，就把这句话改成不带数的说法——禁的是没有背书的数，不是禁止说这件事"
-)
+_NO_ANCHOR_ROUTE = " → 有能背书它的落点就写记号；一条都没有就改成不带数的说法"
 
 # 记号旁边的措辞：**在输入的地方给出这个空要填的值的特征，检测时检测内容合不合这个特征**
 # （用户裁决 2026-08-30）。特征四种，各配一句要求与一道机检：
@@ -478,7 +494,8 @@ def bound_expectation(anchor: ReportAnchor, item_name: str | None = None) -> tup
 
 
 def _bound_choices(side: str) -> str:
-    return "、".join(f"「{root}」" for root in BOUND_ROOTS_BY_SIDE[side])
+    """打回里给的候选词：只给最顺的三个（机检仍认全表）——打回要短，选择摊开反而慢。"""
+    return "／".join(BOUND_ROOTS_BY_SIDE[side][:3])
 
 
 def _adjacent_wording_violations(
@@ -519,38 +536,26 @@ def _adjacent_wording_violations(
             if written is None:
                 _add(
                     "gate-bound-word-missing",
-                    f"{label} 「{clause}{token}」这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**，"
-                    f"记号出来是裸的数（带单位），句子里必须写清这是{BOUND_SIDE_NAME[side]}——"
-                    f"从这几个词里挑一个放在记号前面：{_bound_choices(side)}。"
-                    "不写的话业主会把它读成「刚好就是这个数」",
+                    f"{label} 「{cite(clause)}{token}」缺{BOUND_SIDE_NAME[side]}说法 → "
+                    f"记号前加{_bound_choices(side)}之一",
                 )
             elif _BOUND_SIDE_BY_ROOT[written.group(0)] != side:
-                other = BOUND_SIDE_NAME["min" if side == "max" else "max"]
                 _add(
                     "gate-bound-word-direction",
-                    f"{label} 「{clause}{token}」写的是「{written.group(0)}」（{other}的说法），"
-                    f"而这个空要填的值**只给了{BOUND_SIDE_NAME[side]}**——方向反了，"
-                    f"意思正好说拧。改成这几个之一：{_bound_choices(side)}",
+                    f"{label} 「{cite(clause)}{token}」这是{BOUND_SIDE_NAME[side]}，"
+                    f"「{written.group(0)}」说反了 → 换成{_bound_choices(side)}之一",
                 )
         elif written is not None:
-            why = (
-                "这个记号并列了好几项，每一项的边界说法它自己会带上，你再写一遍就是叠字"
-                if kind == BOUND_CARRIED
-                else "这个空要填的是一个**确定的数**（或一个两端都给了的范围），"
-                "数据里根本没有单侧边界这层意思，写了等于替数据下一个它没给的判断"
-            )
+            why = "记号并列多项、自带各项说法" if kind == BOUND_CARRIED else "这个数没有单侧边界"
             _add(
                 "gate-bound-word-before-ref",
-                f"{label} 「{clause}{token}」记号前写了边界词「{written.group(0)}」——{why}。"
-                f"删掉这个词即可（「按 {token} 做」「留出 {token} 的空间」）",
+                f"{label} 「{cite(clause)}{token}」{why} → 删掉「{written.group(0)}」",
             )
 
         if unit and text[match.end() :].lstrip(" \u3000\t").startswith(unit):
             _add(
                 "gate-unit-after-ref",
-                f"{label} 「{token} {unit}」记号后又写了一遍单位「{unit}」——"
-                "单位由记号自己带出来（写错单位会改掉这个数的大小，故它不交给你写），"
-                "删掉记号后面那个单位即可",
+                f"{label} 「{token} {unit}」单位由记号带出 → 删掉记号后的「{unit}」",
             )
     return violations
 
@@ -611,10 +616,7 @@ def run_unit_gate(
         violations.append(
             Violation(
                 check="gate-cards-exceed-claims",
-                detail=(
-                    f"{len(cards)} 张卡多于 {len(claims)} 条主张——一件事一张卡，"
-                    "多出来的那张没有主张来源（按落点一条一张即是这一步要修的形态）"
-                ),
+                detail=(f"{len(cards)} 张卡多于 {len(claims)} 条主张 → 一件事一张卡，删掉多出来的"),
             )
         )
     domain_anchors = package.domain_anchors(domain)
@@ -640,7 +642,7 @@ def run_unit_gate(
         text = f"{card.thesis}\n{card.body}"
         if not card.thesis.strip() or not card.body.strip():
             violations.append(
-                Violation(check="gate-required-field", detail=f"{label} thesis/body 空")
+                Violation(check="gate-required-field", detail=f"{label} thesis/body 有空的 → 补齐")
             )
         # 正文逐字等于主旨句 = 这张卡没有承载任何推导，等于把落点表换了个排版（违规则 1.6
         # "不以无内容的密度充数"，图 v0.2 §3 卡片是叙事推导的产物而非落点表的另一种形态）。
@@ -655,8 +657,8 @@ def run_unit_gate(
                 Violation(
                     check="gate-thesis-body-duplicate",
                     detail=(
-                        f"{label} 正文与主旨句逐字相同——主旨句说结论，正文要说"
-                        "为什么是这个数、它管的是哪一刻；重复一遍等于这张卡什么都没讲"
+                        f"{label} 「{cite(card.thesis)}」正文与主旨句逐字相同 → "
+                        "正文改成说为什么是这个数、它管哪一刻"
                     ),
                 )
             )
@@ -677,7 +679,7 @@ def run_unit_gate(
             violations.append(
                 Violation(
                     check="gate-number-ref-undeclared",
-                    detail=f"{label} 占位符未在 number_refs 声明：{sorted(undeclared)}",
+                    detail=f"{label} 正文用了 {sorted(undeclared)} 却没声明 → 补进 number_refs",
                 )
             )
         # 对称的另一半（2026-08-29 晚补，真跑立案）：number_refs 是**占位符全集声明**（契约原文），
@@ -696,9 +698,8 @@ def run_unit_gate(
                 Violation(
                     check="gate-number-ref-unused",
                     detail=(
-                        f"{label} number_refs 与正文的记号粒度对不上：{mismatched}"
-                        "——refs 逐字写正文里的那个记号（正文写 {lkp-x.项名} 就声明 lkp-x.项名）；"
-                        f"本卡正文实际写了：{sorted(placeholders)}"
+                        f"{label} refs {mismatched} 与正文记号粒度对不上 → refs 逐字写正文那个记号"
+                        f"（正文实际写了 {sorted(placeholders)}）"
                     ),
                 )
             )
@@ -708,9 +709,8 @@ def run_unit_gate(
                 Violation(
                     check="gate-number-ref-unused",
                     detail=(
-                        f"{label} number_refs 声明了却未在正文引用：{absent}"
-                        "——refs 是占位符全集声明；这些落点（或落点里的这几项）有值，"
-                        "要么引用它，要么别声明（有值的不许说「给不出」，那是被禁止的隐藏）"
+                        f"{label} refs 声明了 {absent} 却没在正文引用 → 要么引用它，要么别声明"
+                        "（它有值，不许说「给不出」）"
                     ),
                 )
             )
@@ -728,8 +728,8 @@ def run_unit_gate(
                     Violation(
                         check="gate-assertion-not-budgeted",
                         detail=(
-                            f"{label} 声明谓词「{predicate}」不在本域断言预算内"
-                            f"（预算内的：{sorted(budget)}，规则 4.13/5.8）"
+                            f"{label} 谓词「{predicate}」不在本域断言预算内 → "
+                            f"只能用这几个：{sorted(budget)}"
                         ),
                     )
                 )
@@ -741,8 +741,8 @@ def run_unit_gate(
                     Violation(
                         check="gate-assertion-unbacked",
                         detail=(
-                            f"{label} 谓词「{predicate}」背书不足：缺失 {missing}、降档 {degraded}"
-                            "——断言预算要求 requires 全部已求值且非降档（规则 5.8/4.10a）"
+                            f"{label} 谓词「{predicate}」背书不足（缺 {missing}、降档 {degraded}）"
+                            " → 这轮别用它下判断"
                         ),
                     )
                 )
@@ -752,8 +752,7 @@ def run_unit_gate(
             violations.append(
                 Violation(
                     check="gate-digit-outside-ref",
-                    detail=f"{label} 正文出现裸数字（数字只能经 {{lkp-*}} 占位引用落点对象）"
-                    f"{_NO_ANCHOR_ROUTE}",
+                    detail=f"{label} 正文出现裸数字{_NO_ANCHOR_ROUTE}",
                 )
             )
         chinese_number = CHINESE_NUMBER_RE.search(stripped)
@@ -761,8 +760,8 @@ def run_unit_gate(
             violations.append(
                 Violation(
                     check="gate-chinese-numeral",
-                    detail=f"{label} 正文以中文数字写数（「{chinese_number.group(0)}」）"
-                    f"——数字纪律管的是数不是字形{_NO_ANCHOR_ROUTE}",
+                    detail=f"{label} 「{chinese_number.group(0)}」是中文数字写的数"
+                    f"{_NO_ANCHOR_ROUTE}",
                 )
             )
         # 客户语域禁内部标识名：{lkp-*} 是渲染契约，裸 lkp- 是把内部命名空间漏给业主看
@@ -771,8 +770,8 @@ def run_unit_gate(
                 Violation(
                     check="gate-lkp-identifier-leak",
                     detail=(
-                        f"{label} 正文出现裸 lkp- 标识名——内部落点编号不进客户语域；"
-                        "要引用数字写 {lkp-id} 占位，要说这条没背书就用人话说"
+                        f"{label} 正文出现裸 lkp- 编号 → 要数字就写 {{lkp-id}} 占位，"
+                        "要说没背书就用人话说"
                     ),
                 )
             )
@@ -786,8 +785,8 @@ def run_unit_gate(
                     Violation(
                         check="gate-item-name-leak",
                         detail=(
-                            f"{label} 正文出现分项记号「{item}」——项名是内部标签不进客户语域；"
-                            "要那一项的数就写 {lkp-id.项名} 占位，那一项是什么场合用人话说"
+                            f"{label} 正文出现项名「{item}」（内部标签） → "
+                            "要那一项的数写 {{lkp-id.项名}} 占位，那是什么场合用人话说"
                         ),
                     )
                 )
@@ -795,7 +794,7 @@ def run_unit_gate(
         for term in banned:
             if term in text:
                 violations.append(
-                    Violation(check="gate-banned-term", detail=f"{label} 命中禁词「{term}」")
+                    Violation(check="gate-banned-term", detail=f"{label} 禁词「{term}」 → 换人话说")
                 )
 
         for sample in good_samples:
@@ -804,8 +803,8 @@ def run_unit_gate(
                     Violation(
                         check="gate-sample-verbatim-copy",
                         detail=(
-                            f"{label} 逐字抄了语域示范「{sample}」——示范给的是怎么讲，不是讲什么；"
-                            "照抄等于把一句与这家人无关、也没有落点背书的话当成结论"
+                            f"{label} 「{cite(sample)}」逐字抄自语域示范 → "
+                            "示范给的是怎么讲不是讲什么，换成这家人的话"
                         ),
                     )
                 )
@@ -816,7 +815,8 @@ def run_unit_gate(
             # 的 pattern 就是「边界词 + {lkp-」——剥掉占位符它永远打不中。原先剥占位是防 pattern
             # 误中占位符内部，但占位符体是 kebab-case ASCII，中不了任何中文/数字/量纲 pattern，
             # 剥与不剥只对"引用占位符本身"的判据有区别——而那正是要能中的。
-            hit = re.search(check.pattern, text) is not None
+            found = re.search(check.pattern, text)
+            hit = found is not None
             # check_type 决定 pattern 的语义，此前被整个忽略（凡带 pattern 一律"命中即违规"），
             # 于是 regex_require_annotation（"出现工程量纲**则要求**配翻译"）被反着执行。
             # 当前因裸数字已禁而不会命中，是休眠 bug——自迭代回路首采 §五-2 抓到。
@@ -830,9 +830,15 @@ def run_unit_gate(
                             detail=f"{label} {check.message}（命中量纲但本卡未引用任何落点）",
                         )
                     )
-            elif hit:
+            elif found is not None:
+                # cr- 判据的 message 是 release 数据、只说"哪儿不对"，**原文由这里补上**
+                # （用户裁决 2026-08-30：打回要带被打回的原文）——不补的话像 cr-weak-word
+                # 这种只说"分析级结论句禁弱词"，模型根本不知道是哪个词。
                 violations.append(
-                    Violation(check=check.asset_id, detail=f"{label} {check.message}")
+                    Violation(
+                        check=check.asset_id,
+                        detail=f"{label} 「{found.group(0)}」{check.message}",
+                    )
                 )
 
     return violations

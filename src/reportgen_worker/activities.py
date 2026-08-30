@@ -53,6 +53,7 @@ from reportgen_worker.models import (
     AnchorBrief,
     BookCheckRequest,
     BookCheckResult,
+    Card,
     JudgeObservation,
     JudgeRun,
     NarrativeClaim,
@@ -192,6 +193,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
     checks = judge_checks(domain, package)
     blocking = blocking_check_ids(domain, package)
     feedback: list[Violation] = []
+    previous_cards: list[Card] = []
     for attempt in range(request.max_rewrites + 1):
         # 叙事推导（图 v0.2 §3 第一步）：只跑一次，重写循环重跑的是写作不是推导——
         # 打回的理由是卡片怎么写，不是这一章该讲什么。推导本身失败才重来（网关抖动/输出不可解析）。
@@ -228,13 +230,17 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             backed_predicates=backed_predicates(domain, package),
             unbacked_predicates=unbacked_predicates(domain, package),
             feedback=feedback,
+            # 上一稿原样带回（用户裁决 2026-08-30）：不带回等于让它"逐条修正"一份看不见的稿子
+            previous_cards=previous_cards,
             attempt=attempt,
         )
         try:
             cards = await writer.write(writer_request)
         except WriterOutputError as e:
             feedback = [Violation(check="gate-writer-output-invalid", detail=str(e))]
+            previous_cards = []  # 这一稿没解析出来，没有原稿可带回
             continue
+        previous_cards = cards
         # 空卡片组不算过检：run_unit_gate 逐卡片跑，没有卡片自然没有违规——"什么都不写"会成为
         # 绕过全部门禁最省事的路径（真跑 2026-08-28 即出现：全域降档后模型交了空数组）。
         # 失败必须在源头响亮报出，不靠下游装配/册检兜住（图 v0.2 §3 绝不静默假成功）。
