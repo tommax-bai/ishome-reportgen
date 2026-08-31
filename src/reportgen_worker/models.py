@@ -163,7 +163,22 @@ class WithheldAnchor(_PackageModel):
 
 
 class GapRecord(_PackageModel):
+    """求值缺口。``basis_tag``（``{domain}@v{n}``）与落点同一口径——**缺口也要能切回它自己那个域**。
+
+    2026-08-31 第一次六章整册真跑立案：缺口原先没有域，activity 里 ``gaps=package.gaps`` 把整册缺口
+    原样发给每一章（落点是按域切的，这里漏了），于是各章为**别的章的缺口**写坦白卡——同一条缺口在
+    四章各说一遍，且 storage 的「总收纳延米数」把该域禁词「延米」带进了 softdeco 的正文。
+
+    ``basis_tag`` **必填，缺了整包解析失败**（同 ``value_kind`` / ``presentation`` 的收窄纪律）。
+    原先这里给了空串缺省 + "切不出域就全发"的回退，那是**下游替上游兜底**：上游哪天不发这个
+    字段，缺口又会静默地群发给每一章——回到刚修掉的那个 bug，而且没人会知道。契约里它本来就是
+    required（`report_data_package.schema.json`），消费侧再容错等于两处口径不一致。
+    用户裁决 2026-08-31：「每一个模块保证自己模块内部的质量，上游模块产生的数据对下游来说是
+    可以信任的，上游如果做的不对的话，我们应该是去找上游的服务去修改，而不是我们自己在这边去补。」
+    """
+
     lkp_id: str
+    basis_tag: str
     reason: str
     detail: str | None = None
 
@@ -317,6 +332,14 @@ class ReportDataPackage(_PackageModel):
     def domain_anchors(self, domain: str) -> list[ReportAnchor]:
         """本域落点切片（单元输入只见本域，图 v0.2 §2 依赖只存在于求值线）。"""
         return [a for a in self.anchors if a.basis_tag.split("@")[0] == domain]
+
+    def domain_gaps(self, domain: str) -> list[GapRecord]:
+        """本域缺口切片（同 :meth:`domain_anchors`，单元输入只见本域）。
+
+        ``basis_tag`` 是必填（见 :class:`GapRecord`），故此处不做"切不出就全发"的兜底：
+        上游违约在解包那一刻就该响亮失败，不该由这里悄悄补上。
+        """
+        return [g for g in self.gaps if g.basis_tag.split("@")[0] == domain]
 
     def domain_triggered_rules(self, domain: str) -> list[TriggeredRule]:
         """本域触发规则切片（同 :meth:`domain_anchors`，单元输入只见本域）。"""

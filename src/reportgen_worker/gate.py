@@ -969,4 +969,35 @@ def run_unit_gate(
                     )
                 )
 
+    # 整章装死：本域有值的落点**一条都没在正文里露面**（v2.4「有值必须照发」的兜底判据）。
+    #
+    # 立案（2026-08-31 第一次六章整册真跑，成册的那一本）：softdeco 章六张卡全是"现在还无法确定
+    # 具体数值"，而包里明明给了它三条带值的落点——遮光率 min 0.9、主色上限 max 3、配色比例
+    # 0.6/0.3/0.1。**有值的东西被说成给不出**，正是规则 4.18 禁的隐藏还魂换了个路子回来。
+    # 已有的 gate-number-ref-unused 逮不住它：那条查的是"声明了 refs 却没写进正文"，而这一章
+    # **压根不声明**，于是一条都不触发。漏洞是"不声明就不算违规"。
+    #
+    # 为什么判据是"零"而不是某个比例：**阈值有数据才定**（一贯口径）。同一本册里实测各章用掉
+    # 本域落点 8/8、18/23、11/13、3/3、5/5，唯独 softdeco 是 **0/3**——"一条都没用"是个形态
+    # 不是个阈值，按它判零误伤。"该用掉几条"要不要管，等台账攒够再议，本判据不预设。
+    # prompt 里早写着"有值必须照常给出"，这一章照样装死——**能自动拦住的就别只写在纪律里**。
+    valued_ids = {a.lkp_id for a in domain_anchors}
+    if valued_ids and cards:
+        surfaced = {
+            anchor_id_of(ref)
+            for card in cards
+            for ref in placeholder_refs(f"{card.thesis}\n{card.body}")
+        }
+        if not (valued_ids & surfaced):
+            violations.append(
+                Violation(
+                    check="gate-anchors-all-unused",
+                    detail=(
+                        f"本域有 {len(valued_ids)} 条落点带着值下发给你，整章正文一条都没引用 → "
+                        "有值的必须照常给出；说「这项给不出数」而它明明有值，是被禁止的隐藏。"
+                        f"这几条是：{sorted(valued_ids)}"
+                    ),
+                )
+            )
+
     return violations

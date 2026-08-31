@@ -6,6 +6,7 @@ import copy
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from reportgen_worker.gate import (
     annotation_required_anchors,
@@ -939,3 +940,56 @@ def test_banned_block_keeps_ungrouped_terms() -> None:
     """平表里有、分组里没有的词不许丢——平表是分组的并集，丢一个就是漏禁。"""
     block = banned_terms_block(["可能", "延米"], {"weak": ["可能"]})
     assert "延米" in block
+
+
+def test_gaps_are_sliced_to_this_domain_like_anchors() -> None:
+    """缺口按域切，与落点同一口径（`basis_tag` 前缀）。
+
+    真跑立案（2026-08-31 第一次六章整册）：activity 里落点是 `domain_anchors(domain)` 切的，缺口却是
+    `package.gaps` **整册原样下发**。后果三件：同一条缺口在四章各写了一遍坦白卡；storage 的
+    「总收纳延米数」把该域禁词「延米」带进了 softdeco 正文；softdeco 三张替别人坦白的卡把它自己
+    三条有值的落点挤没了。
+    """
+    pkg = copy.deepcopy(PACKAGE_JSON)
+    pkg["gaps"] = [
+        {"lkpId": "lkp-a", "basisTag": "ergonomics@v10", "reason": "missing_input"},
+        {"lkpId": "lkp-b", "basisTag": "storage@v10", "reason": "formula_not_implemented"},
+    ]
+    package = ReportDataPackage.model_validate(pkg)
+    assert [g.lkp_id for g in package.domain_gaps("ergonomics")] == ["lkp-a"]
+    assert [g.lkp_id for g in package.domain_gaps("storage")] == ["lkp-b"]
+    assert package.domain_gaps("lighting") == []
+
+
+def test_gap_without_basis_tag_fails_the_whole_package() -> None:
+    """缺口少了 `basis_tag` = 上游违约 → **整包解析失败**，不由消费侧兜底。
+
+    第一版这里写的是"切不出域就全发"的容错。那是**下游替上游补**：上游哪天不发这个字段，缺口
+    又会静默群发给每一章——回到刚修掉的那个 bug，而且没人会知道。契约里 basisTag 本来就是
+    required，消费侧再容错等于两处口径不一致。
+
+    用户裁决 2026-08-31：「每一个模块保证自己模块内部的质量，上游模块产生的数据对下游来说是
+    可以信任的，上游如果做的不对的话，我们应该是去找上游的服务去修改，而不是我们自己在这边去补。」
+    """
+    pkg = copy.deepcopy(PACKAGE_JSON)
+    pkg["gaps"] = [{"lkpId": "lkp-a", "reason": "missing_input"}]
+    with pytest.raises(ValidationError):
+        ReportDataPackage.model_validate(pkg)
+
+
+def test_chapter_that_uses_no_valued_anchor_is_pushed_back() -> None:
+    """整章装死要拦下：本域有值的落点一条都没在正文露面 = 假坦白（v2.4 禁的隐藏还魂）。
+
+    真跑立案（2026-08-31 成册的那一本）：softdeco 六张卡全是"现在还无法确定具体数值"，而包里给了
+    它三条带值的落点。`gate-number-ref-unused` 逮不住——那条查"声明了却没写进正文"，这一章压根
+    不声明。判据取"零"这个**形态**不取比例：同册各章实测 8/8、18/23、11/13、3/3、5/5，唯 softdeco 0/3。
+    """
+    domain = PACKAGE.domains[0]
+    anchors = PACKAGE.domain_anchors(domain)
+    assert anchors, "夹具本域得有带值落点，否则这条判据无从谈起"
+    dead = [Card(thesis="这件事现在还无法确定。", body="要等下一步才能算出来，这轮给不出数。")]
+    checks = [v.check for v in run_unit_gate(dead, domain, PACKAGE)]
+    assert "gate-anchors-all-unused" in checks
+    # 只要有一条落点真的露面，这条判据就不该响——它判的是"整章一条都没用"
+    alive = [Card(thesis=f"这件事定在 {{{anchors[0].lkp_id}}}。", body="配套的理由写在这里。")]
+    assert "gate-anchors-all-unused" not in [v.check for v in run_unit_gate(alive, domain, PACKAGE)]

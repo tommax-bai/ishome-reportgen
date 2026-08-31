@@ -240,7 +240,10 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         user_parts.append(_rewrite_part(request))
     if request.gaps:
         user_parts.append(
-            "本次求不出的落点（「这件事现在还算不出来」本身可以是一条主张）：\n"
+            "这几条落点这次**没有值**。正文里一个字都不要提，**也不许为它单独写一张卡**——\n"
+            "报告是一次性交付物，交到业主手上就是最终稿，里头不该有「以后再算给你」这种态：\n"
+            "既不许写成「等你确认」「等你提供」，也不许写成「我们下一步补给你」。\n"
+            "讲不了的就不讲（规则 4.18 宁薄勿撑）。也不许编数、不许绕着它作分析：\n"
             + "\n".join(f"- {g.lkp_id}：{g.reason}" for g in request.gaps)
         )
     return [

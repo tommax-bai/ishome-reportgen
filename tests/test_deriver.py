@@ -16,6 +16,7 @@ from reportgen_worker.deriver import (
 from reportgen_worker.gate import backed_predicates, collect_banned_terms, unbacked_predicates
 from reportgen_worker.models import (
     AnchorBrief,
+    GapRecord,
     NarrativeClaim,
     TriggeredRule,
     TriggerEvidence,
@@ -416,3 +417,33 @@ def test_banned_pushback_in_derivation_routes_by_group_like_the_writing_step() -
         parse_claims(
             '[{"claim": "这一章不替谁报价。", "anchors": []}]', set(), ["报价"], banned_groups={}
         )
+
+
+def test_gap_block_forbids_writing_about_it_at_all() -> None:
+    """缺口是**我们这边还没算出来的**，不是业主该告诉我们的——两步 prompt 都要说清。
+
+    真跑立案（2026-08-31 成册的那一本）：四章都把缺口写成了"等你确认沙发落位""等你提供物品清单"，
+    **把我们自己没做完的活说成业主没交作业**。往上追两层：写作 prompt 原文就写着"可坦白留待现场
+    确认"；而求值线的缺口 reason 只有 missing_input / formula_not_implemented / empty_definition
+    三种，**没有一种的意思是"等客户告诉我们"**。地毯那条的规则还是我们自己写的（沙发前沿外扩
+    [200,300]mm），缺的沙发落位来自定稿平面——那也是我们下一步自己产的。
+
+    用户裁决 2026-08-31（两句，第二句否掉了第一版改法）：
+    ①「地毯尺寸和收纳走长应该是我们给出的建议，对吗？而不应该是客户给出来的。客户怎么知道地毯
+      应该用多长的呢？这应该是我们告诉他的，而不是他告诉我们的。」
+    ②「不要在报告里写我们后面算给他，这报告都给客户了，我们后面怎么算给他？」「我们不应该有后面
+      算给他这个概念。」
+
+    所以现口径不是"把活认回来"，是**没有值就不写**：报告是一次性交付物，交付那一刻要么有这个数，
+    要么这件事根本不进报告（规则 4.18 宁薄勿撑）。缺口只作为"别编它"的禁令下发。
+    """
+    request = copy.deepcopy(request_for())
+    request.gaps = [GapRecord(
+            lkp_id="lkp-rug-size-rule", basis_tag="softdeco@v9", reason="formula_not_implemented"
+        )]
+    user = build_derive_messages(request)[1]["content"]
+    assert "没有值" in user and "不许为它单独写一张卡" in user, "缺口不该变成可写的题材"
+    assert "等你确认" in user and "我们下一步补给你" in user and "不许写成" in user, (
+        "两个方向都要堵死：推给业主、和推给我们自己的「以后」"
+    )
+    assert "留待现场确认" not in user, "这半句正是把活推给业主的出处"

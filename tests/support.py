@@ -109,7 +109,15 @@ PACKAGE_JSON: dict[str, Any] = {
     ],
     # v2.4（2026-08-29）取消隐藏档后恒空：字段按契约"只增不删"保留，永远没有内容
     "withheldAnchors": [],
-    "gaps": [{"lkpId": "lkp-tv-distance", "reason": "missing_input", "detail": "屏高 × [3,4]"}],
+    # basisTag 必填：缺口要能切回它自己那个域（同落点），消费侧不做"切不出就全发"的兜底
+    "gaps": [
+        {
+            "lkpId": "lkp-tv-distance",
+            "basisTag": "ergonomics@v10",
+            "reason": "missing_input",
+            "detail": "屏高 × [3,4]",
+        }
+    ],
     "personasByDomain": {
         "ergonomics": [
             {
