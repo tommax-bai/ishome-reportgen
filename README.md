@@ -38,3 +38,39 @@ uv run reportgen-worker  # 起 worker（TEMPORAL_ADDRESS，默认 localhost:7233
 ```
 
 新 clone 后执行一次：`git config core.hooksPath .githooks`（本地 pre-push 质量门）。
+
+## 质量基线：三档拟真上游数据包 + 一条可重复跑法
+
+**答的问题**："这次改动到底有没有用。" 以前答不出——每次测都拿真求值线（project-svc）当场算的包
+当卷子，release 一变、种子一改卷子就换了，"整册四跑一成"这种数**跨天不可比**。
+现在卷子定死在 `tests/fixtures/`（`evaluatedOn` 也定死），跑法定死在 `tests/quality_baseline.py`。
+
+- **齐全档** `full`：58 条落点全给值、0 缺口（55 条取自 2026-08-31 真跑，3 条是造的）。
+- **部分缺档** `partial-gaps`：55 条有值 + 3 条缺口——2026-08-31 六章整册真跑那份形状。
+- **大量缺档** `mostly-gaps`：12 条有值（每域 2 条）+ 46 条缺口——测"上游给得很少时怎么应对"。
+
+三档是**同一户人家、同一批 58 条落点**，只差上游算出来了几条，所以档与档之间可比。
+
+```bash
+uv run python -m tests.quality_baseline --tier partial-gaps --dry-run   # 只走参数解析与派发前守卫
+uv run python -m tests.quality_baseline --tier partial-gaps --runs 5    # 真派发：连跑 5 次出成册率
+```
+
+真跑要本地栈起着（genpipe 入站面 `127.0.0.1:8104` + Temporal `localhost:7233` + reportgen/reportrender
+worker），**会烧 LLM**。派发走的是生产那条缝 `POST /api/v1/genpipe/reports`，同一套校验；
+收口从 Temporal 取（报告没有 HTTP 状态查询面，状态真相在 `svc_project`，规则 8.1）。
+输出＝每跑的判读三件套（`verdict` / `book_key` / `failed_domains`）+ 两个旋钮的实际用量
+（`rewrite_rounds_by_domain` 章内重写 / `unit_retries_by_domain` 整章重开），外加连跑汇总的
+**成册率与各章失败次数**——单跑的数是噪声（同一份输入连跑五次，dom-budget 中三跑失败两跑通过）。
+
+### 两条硬约束
+
+1. **fixture 禁止成为生产回退路径。** 只准出现在测试与本仓工具里；生产链路上上游没给就是没给，
+   响亮失败，然后**去找上游改**（用户裁决 2026-08-31：每个模块保证自己模块内部的质量，上游的数据
+   对下游是可以信任的，上游做得不对就去改上游的服务，不在下游补——系统应该是松耦合的）。
+   这条不靠自觉：fixture 在 `tests/` 下，而打包只收 `src/reportgen_worker`，**它根本不在发出去的
+   轮子里**；另有一条测试逐字扫 `src/`，拦住"在生产代码里 import 它"这个念头。
+2. **禁止 import_seeds、禁止进 release。** 库里仍然是"没有就是没有"：mock 落点一条都不许回灌资产库，
+   也不许拿它铺种子（种子禁预置 calibrated、反例只收真跑样本）。mock 落点的 `source` 与
+   `provenance.source` 都以 `【MOCK fixture，禁止入库】` 开头，跑出来的 report_id 也以 `01MOCK` 起头——
+   混进哪份产物，那份产物自己写着它是 mock。

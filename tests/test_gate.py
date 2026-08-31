@@ -982,7 +982,8 @@ def test_chapter_that_uses_no_valued_anchor_is_pushed_back() -> None:
 
     真跑立案（2026-08-31 成册的那一本）：softdeco 六张卡全是"现在还无法确定具体数值"，而包里给了
     它三条带值的落点。`gate-number-ref-unused` 逮不住——那条查"声明了却没写进正文"，这一章压根
-    不声明。判据取"零"这个**形态**不取比例：同册各章实测 8/8、18/23、11/13、3/3、5/5，唯 softdeco 0/3。
+    不声明。判据取"零"这个**形态**不取比例：同册各章实测 8/8、18/23、11/13、3/3、5/5，
+    唯 softdeco 0/3。
     """
     domain = PACKAGE.domains[0]
     anchors = PACKAGE.domain_anchors(domain)

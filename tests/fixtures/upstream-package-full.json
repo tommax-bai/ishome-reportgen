@@ -1,0 +1,3810 @@
+{
+  "evaluatedOn": "2026-08-31",
+  "entitlement": "PAID",
+  "domains": [
+    "budget",
+    "ergonomics",
+    "lighting",
+    "material",
+    "softdeco",
+    "storage"
+  ],
+  "releases": [
+    {
+      "domain": "budget",
+      "releaseTag": "budget@v12"
+    },
+    {
+      "domain": "ergonomics",
+      "releaseTag": "ergonomics@v10"
+    },
+    {
+      "domain": "lighting",
+      "releaseTag": "lighting@v13"
+    },
+    {
+      "domain": "material",
+      "releaseTag": "material@v9"
+    },
+    {
+      "domain": "softdeco",
+      "releaseTag": "softdeco@v9"
+    },
+    {
+      "domain": "storage",
+      "releaseTag": "storage@v10"
+    }
+  ],
+  "anchors": [
+    {
+      "lkpId": "lkp-accent-ratio",
+      "name": "重点照明照度倍数",
+      "numberClass": "analysis",
+      "unit": "倍",
+      "valueKind": "range",
+      "value": {
+        "max": 5,
+        "min": 3
+      },
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "GB/T 50034-2024 表5.2.1 原文直取（run-2026-08-28-2，PDF 全文 zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：起居室 0.75m 水平面 一般活动 100lx / 书写阅读 300lx——300/100=3× 即本倍数下界；三版同值（2004/2013/2024）。上界 5× 为行业通行（无外部源）。注意 2024 版为 GB/T 推荐性标准，5.2.1 措辞为'宜符合'（原 GB 强制性 2024-08-01 废止）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "GB/T 50034-2024 表5.2.1 原文直取（run-2026-08-28-2，PDF 全文 zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：起居室 0.75m 水平面 一般活动 100lx / 书写阅读 300lx——300/100=3× 即本倍数下界；三版同值（2004/2013/2024）。上界 5× 为行业通行（无外部源）。注意 2024 版为 GB/T 推荐性标准，5.2.1 措辞为'宜符合'（原 GB 强制性 2024-08-01 废止）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-beam-accent",
+      "name": "重点照明光束角",
+      "numberClass": "selection",
+      "unit": "°",
+      "valueKind": "range",
+      "value": {
+        "max": 24,
+        "min": 15
+      },
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "行业通行；内部规范 §5.1。部分核（run-2026-08-28）：24°/36° 为市售通行档（欧普皓系列 vmall.com/product/10086627128138；选购攻略 zhuanlan.zhihu.com/p/571943842 24-36° 洗墙/重点、60° 基础）——24° 上界成立",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行；内部规范 §5.1。部分核（run-2026-08-28）：24°/36° 为市售通行档（欧普皓系列 vmall.com/product/10086627128138；选购攻略 zhuanlan.zhihu.com/p/571943842 24-36° 洗墙/重点、60° 基础）——24° 上界成立",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-bed-height",
+      "name": "床面高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "max": 500,
+        "min": 450
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-bed-side",
+      "name": "床侧净距",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 750
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-blackout-rate",
+      "name": "卧室窗帘遮光率",
+      "numberClass": "selection",
+      "unit": "比率",
+      "valueKind": "range",
+      "value": {
+        "min": 0.9
+      },
+      "referencePlane": null,
+      "basisTag": "softdeco@v9",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-budget-confidence-width",
+      "name": "置信到区间宽度的映射",
+      "numberClass": "analysis",
+      "unit": "±比例",
+      "valueKind": "tier",
+      "value": {
+        "low": 0.5,
+        "high": 0.15,
+        "medium": 0.3
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-budget-driver",
+      "name": "造价里最吃钱的一项",
+      "numberClass": "analysis",
+      "unit": null,
+      "valueKind": "component",
+      "value": {
+        "custom-cabinet": {
+          "min": 0.28,
+          "max": 0.34
+        },
+        "main-material": {
+          "min": 0.21,
+          "max": 0.27
+        },
+        "mep": {
+          "min": 0.11,
+          "max": 0.15
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "【MOCK fixture，禁止入库】按本落点公式「占比最高且量可变的分项」算；输入取 mock 定稿平面：定制柜投影 18.6㎡、水电点位 96 个",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "【MOCK fixture，禁止入库】按本落点公式「占比最高且量可变的分项」算；输入取 mock 定稿平面：定制柜投影 18.6㎡、水电点位 96 个",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-budget-share",
+      "name": "分项造价占比带",
+      "numberClass": "analysis",
+      "unit": null,
+      "valueKind": "component",
+      "value": {
+        "painting": {
+          "max": 0.1,
+          "min": 0.05
+        },
+        "demolition": {
+          "max": 0.08,
+          "min": 0.03
+        },
+        "main-material": {
+          "max": 0.35,
+          "min": 0.2
+        },
+        "soft-furnishing": {
+          "max": 0.2,
+          "min": 0.08
+        },
+        "custom-cabinetry": {
+          "max": 0.35,
+          "min": 0.2
+        },
+        "masonry-carpentry": {
+          "max": 0.25,
+          "min": 0.15
+        },
+        "plumbing-electrical": {
+          "max": 0.15,
+          "min": 0.08
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "首个外部粗锚（run-2026-08-28，口径=总预算含家电，与本表七分项口径不同不换算）：硬装≈50%［45,60］/软装［25,30］/家电［20,25］——住小帮 7000562159881028127 与 7000575444755939854（硬50/软30/家电20）+ 房天下 bj_968686（硬:软:人工 2:1:1，分母口径异）；定制归属两源不一（软装内 60% vs 独立 25%）记源生口径。'水电:泥木:油漆=2:3:5' 疑为摘要错配（油漆占最大不合常理），不采",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "首个外部粗锚（run-2026-08-28，口径=总预算含家电，与本表七分项口径不同不换算）：硬装≈50%［45,60］/软装［25,30］/家电［20,25］——住小帮 7000562159881028127 与 7000575444755939854（硬50/软30/家电20）+ 房天下 bj_968686（硬:软:人工 2:1:1，分母口径异）；定制归属两源不一（软装内 60% vs 独立 25%）记源生口径。'水电:泥木:油漆=2:3:5' 疑为摘要错配（油漆占最大不合常理），不采",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-budget-tier-gap",
+      "name": "三档情景价差带",
+      "numberClass": "analysis",
+      "unit": "倍",
+      "valueKind": "comparison",
+      "value": {
+        "medium-vs-low": {
+          "max": 1.8,
+          "min": 1.3
+        },
+        "high-vs-medium": {
+          "max": 2.2,
+          "min": 1.4
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "首个外部粗锚（run-2026-08-27）：公开行情整装档位 简装 1000-1500 / 精装 2000-2500 / 豪装 3000+ 元/㎡（土巴兔 z349188 等）→ 精/简 ≈1.7-2.0、豪/精 ≥1.2，与本区间部分重叠",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "首个外部粗锚（run-2026-08-27）：公开行情整装档位 简装 1000-1500 / 精装 2000-2500 / 豪装 3000+ 元/㎡（土巴兔 z349188 等）→ 精/简 ≈1.7-2.0、豪/精 ≥1.2，与本区间部分重叠",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-cct-living",
+      "name": "起居与卧室色温",
+      "numberClass": "selection",
+      "unit": "K",
+      "valueKind": "single",
+      "value": 3000,
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "行业通行；内部规范 §5.1。厂商在售验证（run-2026-08-28，两源）：欧普皓系列筒射灯 3000K 在售（vmall.com/product/10086627128138）；参数科普 3000K 及以下适居室（digital.it168.com/a2026/0713/6940/000006940354.shtml）。商品级规格随货架打标回流（规则 5.3）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "行业通行；内部规范 §5.1。厂商在售验证（run-2026-08-28，两源）：欧普皓系列筒射灯 3000K 在售（vmall.com/product/10086627128138）；参数科普 3000K 及以下适居室（digital.it168.com/a2026/0713/6940/000006940354.shtml）。商品级规格随货架打标回流（规则 5.3）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-cct-night",
+      "name": "夜灯动线色温",
+      "numberClass": "selection",
+      "unit": "K",
+      "valueKind": "single",
+      "value": 2700,
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "行业通行；内部规范 §5.1",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行；内部规范 §5.1",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-cct-task",
+      "name": "操作台与镜前色温",
+      "numberClass": "selection",
+      "unit": "K",
+      "valueKind": "single",
+      "value": 4000,
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "行业通行；内部规范 §5.1。厂商在售验证（run-2026-08-28，两源）：欧普皓系列 4000K 在售（vmall.com/product/10086627128138）；参数科普 4000K 中性光适厨卫操作（digital.it168.com/a2026/0713/6940/000006940354.shtml）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "行业通行；内部规范 §5.1。厂商在售验证（run-2026-08-28，两源）：欧普皓系列 4000K 在售（vmall.com/product/10086627128138）；参数科普 4000K 中性光适厨卫操作（digital.it168.com/a2026/0713/6940/000006940354.shtml）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-cct-variety-max",
+      "name": "全屋色温种类上限",
+      "numberClass": "analysis",
+      "unit": "种",
+      "valueKind": "range",
+      "value": {
+        "max": 3
+      },
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "内部规范 §5.1（经验条目，无外部真源）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "内部规范 §5.1（经验条目，无外部真源）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-chair-height",
+      "name": "座椅高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 450,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "同 lkp-desk-height：GB/T 3326-2016 标准号已定位，数值表未取到。旧版单源旁证：GB/T 3326-1997 椅座面高上限 460mm、桌椅高差 250~320mm——450 与 720 的高差 270mm 落在该带内，但单源不足以采",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "同 lkp-desk-height：GB/T 3326-2016 标准号已定位，数值表未取到。旧版单源旁证：GB/T 3326-1997 椅座面高上限 460mm、桌椅高差 250~320mm——450 与 720 的高差 270mm 落在该带内，但单源不足以采",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-color-main-max",
+      "name": "全屋主色数量上限",
+      "numberClass": "analysis",
+      "unit": "种",
+      "valueKind": "range",
+      "value": {
+        "max": 3
+      },
+      "referencePlane": null,
+      "basisTag": "softdeco@v9",
+      "source": "内部规范 §5.8（经验条目）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "内部规范 §5.8（经验条目）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-color-ratio",
+      "name": "主辅点缀配色比例",
+      "numberClass": "analysis",
+      "unit": null,
+      "valueKind": "component",
+      "value": {
+        "main": 0.6,
+        "accent": 0.1,
+        "secondary": 0.3
+      },
+      "referencePlane": null,
+      "basisTag": "softdeco@v9",
+      "source": "行业通行（60-30-10）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行（60-30-10）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-counter-height",
+      "name": "橱柜台面高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 900,
+        "max": 950
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-cri-living",
+      "name": "起居空间显色指数下限",
+      "numberClass": "selection",
+      "unit": "Ra",
+      "valueKind": "range",
+      "value": {
+        "min": 90
+      },
+      "referencePlane": null,
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2，zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：住宅起居室/卧室/餐厅/厨房/卫生间一般活动 Ra 80；卫生间化妆台 Ra 90；走廊楼梯间与电梯前厅 Ra 60。故本值 Ra≥90 在多数场所是**高于国标**的品质档选择，仅在化妆台一处与国标要求重合。GB 50034-2013 同为 Ra80 底线（run-2026-08-27 已查明）。Ra90 可得性已核（run-2026-08-28，两源）：欧普皓系列 Ra90 在售（vmall.com/product/10086627128138）；参数科普以 Ra≥90 为及格线（digital.it168.com/a2026/0713/6940/000006940354.shtml）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2，zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：住宅起居室/卧室/餐厅/厨房/卫生间一般活动 Ra 80；卫生间化妆台 Ra 90；走廊楼梯间与电梯前厅 Ra 60。故本值 Ra≥90 在多数场所是**高于国标**的品质档选择，仅在化妆台一处与国标要求重合。GB 50034-2013 同为 Ra80 底线（run-2026-08-27 已查明）。Ra90 可得性已核（run-2026-08-28，两源）：欧普皓系列 Ra90 在售（vmall.com/product/10086627128138）；参数科普以 Ra≥90 为及格线（digital.it168.com/a2026/0713/6940/000006940354.shtml）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-desk-height",
+      "name": "书桌高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 720,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "run-2026-08-28-2 定源（**部分**）：GB/T 3326-2016《家具 桌、椅、凳类主要尺寸》（2016-12-13 发布 / 2017-07-01 实施，代替 GB/T 3326-1997；术语含'桌面高/座高/中间净空高'；antpedia.com/standard/8422498-1、yjser.com/a/jiancebiaozhun/3614）——标准号与量的定义已可定位，**数值表未取到**（在付费墙内）。旧版单源旁证：GB/T 3326-1997 桌面高 680~760mm（huida18.com/standard/12331、beitest.com/zixunxinxi/biaozhun/15281）——720 落在该带内，但单源不足以采",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "run-2026-08-28-2 定源（**部分**）：GB/T 3326-2016《家具 桌、椅、凳类主要尺寸》（2016-12-13 发布 / 2017-07-01 实施，代替 GB/T 3326-1997；术语含'桌面高/座高/中间净空高'；antpedia.com/standard/8422498-1、yjser.com/a/jiancebiaozhun/3614）——标准号与量的定义已可定位，**数值表未取到**（在付费墙内）。旧版单源旁证：GB/T 3326-1997 桌面高 680~760mm（huida18.com/standard/12331、beitest.com/zixunxinxi/biaozhun/15281）——720 落在该带内，但单源不足以采",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-dining-pullback",
+      "name": "餐桌就座侧退让",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 900
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-entry-cabinet-depth",
+      "name": "玄关柜深",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 350
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-fridge-vent",
+      "name": "冰箱散热净距",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 50
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-illuminance-bath",
+      "name": "卫生间照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "scenario",
+      "value": {
+        "vanity": 300,
+        "general": 100
+      },
+      "referencePlane": "一般活动 0.75m 水平面；化妆台 台面（★混合照明照度）",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：卫生间 一般活动 0.75m 水平面 100lx（Ra 80）；化妆台 台面 300lx（★混合照明，Ra 90）——本行为 2024 版新增项（条文说明 5.2.1：'增加了卫生间化妆台的照度标准值'）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：卫生间 一般活动 0.75m 水平面 100lx（Ra 80）；化妆台 台面 300lx（★混合照明，Ra 90）——本行为 2024 版新增项（条文说明 5.2.1：'增加了卫生间化妆台的照度标准值'）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-illuminance-bedroom",
+      "name": "卧室照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "scenario",
+      "value": {
+        "general": 75,
+        "reading": 200
+      },
+      "referencePlane": "0.75m 水平面（床头阅读为混合照明）",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2，PDF 全文 zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：卧室 0.75m 水平面，一般活动 75lx、床头阅读 200lx（原表该行带★=混合照明照度），Ra 80。条文说明 5.2.1 原文：'本条与本标准 2013 版相比，提高了床头、阅读、厨房操作台面、走廊、楼梯间、电梯前厅的照度值要求，增加了卫生间化妆台的照度标准值'",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2，PDF 全文 zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：卧室 0.75m 水平面，一般活动 75lx、床头阅读 200lx（原表该行带★=混合照明照度），Ra 80。条文说明 5.2.1 原文：'本条与本标准 2013 版相比，提高了床头、阅读、厨房操作台面、走廊、楼梯间、电梯前厅的照度值要求，增加了卫生间化妆台的照度标准值'",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-illuminance-corridor",
+      "name": "走廊与楼梯间照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "single",
+      "value": 100,
+      "referencePlane": "地面",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：走廊、楼梯间 地面 100lx，Ra 60；同表 电梯前厅 地面 75lx，Ra 60",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：走廊、楼梯间 地面 100lx，Ra 60；同表 电梯前厅 地面 75lx，Ra 60",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-illuminance-dining",
+      "name": "餐厅照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "single",
+      "value": 150,
+      "referencePlane": "0.75m 餐桌面",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：餐厅 0.75m 餐桌面 150lx，Ra 80",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：餐厅 0.75m 餐桌面 150lx，Ra 80",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-illuminance-kitchen",
+      "name": "厨房照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "scenario",
+      "value": {
+        "task": 300,
+        "general": 100
+      },
+      "referencePlane": "一般活动 0.75m 水平面；操作台 台面（★混合照明照度）",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：厨房 一般活动 0.75m 水平面 100lx；操作台 台面 300lx（★混合照明）；Ra 80",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf）：厨房 一般活动 0.75m 水平面 100lx；操作台 台面 300lx（★混合照明）；Ra 80",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-illuminance-living",
+      "name": "起居室照度标准值",
+      "numberClass": "analysis",
+      "unit": "lx",
+      "valueKind": "scenario",
+      "value": {
+        "general": 100,
+        "reading": 300
+      },
+      "referencePlane": "0.75m 水平面",
+      "basisTag": "lighting@v13",
+      "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2；标准全文 PDF，共 155 页，zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf；住建部公告 2024 年第 33 号，2024-03-12 发布 / 2024-08-01 实施）：起居室 0.75m 水平面，一般活动 100lx、书写阅读 300lx，Ra 80",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "★原文直取 GB/T 50034-2024 表5.2.1（run-2026-08-28-2；标准全文 PDF，共 155 页，zcsys.ncepu.edu.cn/docs/2025-01/d5c197c2837e4892ac7d02faae298500.pdf；住建部公告 2024 年第 33 号，2024-03-12 发布 / 2024-08-01 实施）：起居室 0.75m 水平面，一般活动 100lx、书写阅读 300lx，Ra 80",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-kitchen-u-gap",
+      "name": "U型厨房两排间距",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "max": 1200,
+        "min": 900
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-long-hang-height",
+      "name": "长衣区净高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 1400
+      },
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-luggage-bay",
+      "name": "行李箱仓位净尺寸",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "dimension",
+      "value": {
+        "depth": 350,
+        "width": 500,
+        "height": 800
+      },
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-material-tier-gap",
+      "name": "三档替代价差带",
+      "numberClass": "analysis",
+      "unit": "倍",
+      "valueKind": "comparison",
+      "value": {
+        "medium-vs-low": {
+          "max": 2.0,
+          "min": 1.4
+        },
+        "high-vs-medium": {
+          "max": 2.5,
+          "min": 1.5
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "material@v9",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-material-variety-max",
+      "name": "全屋主材种类上限",
+      "numberClass": "analysis",
+      "unit": "种",
+      "valueKind": "range",
+      "value": {
+        "max": 5
+      },
+      "referencePlane": null,
+      "basisTag": "material@v9",
+      "source": "内部规范 §5.6（经验条目，无外部真源）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "内部规范 §5.6（经验条目，无外部真源）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-material-warm-cool-ratio",
+      "name": "冷暖材质比例带",
+      "numberClass": "analysis",
+      "unit": null,
+      "valueKind": "range",
+      "value": {
+        "max": 0.7,
+        "min": 0.3
+      },
+      "referencePlane": null,
+      "basisTag": "material@v9",
+      "source": "内部规范 §5.6（经验条目）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "内部规范 §5.6（经验条目）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-mirror-height",
+      "name": "镜面中心高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 1600,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-passage-main",
+      "name": "主通道净宽",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 900
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-passage-secondary",
+      "name": "次通道净宽",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 750
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-price-custom-cabinet",
+      "name": "定制柜（投影面积计价）",
+      "numberClass": "analysis",
+      "unit": "元/投影㎡",
+      "valueKind": "range",
+      "value": {
+        "min": 800,
+        "max": 1800
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "知乎 zhuanlan.zhihu.com/p/2036013911363860056（2026 全屋定制盘点，投影面积四档）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "知乎 zhuanlan.zhihu.com/p/2036013911363860056（2026 全屋定制盘点，投影面积四档）",
+        "effectiveFrom": "2026-08-27",
+        "effectiveTo": "2026-11-27",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-price-demolition",
+      "name": "墙体拆除",
+      "numberClass": "analysis",
+      "unit": "元/㎡",
+      "valueKind": "range",
+      "value": {
+        "min": 20,
+        "max": 60
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "装信通 zx123.cn/zxbk/2392615（2025 拆除报价明细）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "装信通 zx123.cn/zxbk/2392615（2025 拆除报价明细）",
+        "effectiveFrom": "2026-08-27",
+        "effectiveTo": "2026-11-27",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-price-electrical-point",
+      "name": "水电点位（开关/插座/水口各计一位）",
+      "numberClass": "analysis",
+      "unit": "元/点位",
+      "valueKind": "range",
+      "value": {
+        "min": 150,
+        "max": 500
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "m.sohu.com/a/1025834698_122469136 与 zx123.cn/2021/1220/2353557（每点位 150-300 元；100㎡ 约 50-70 位）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "m.sohu.com/a/1025834698_122469136 与 zx123.cn/2021/1220/2353557（每点位 150-300 元；100㎡ 约 50-70 位）",
+        "effectiveFrom": "2026-08-27",
+        "effectiveTo": "2026-11-27",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-price-hydro-labor-sqm",
+      "name": "水电改造人工费（按建筑面积计价口径）",
+      "numberClass": "analysis",
+      "unit": "元/㎡",
+      "valueKind": "range",
+      "value": {
+        "min": 60,
+        "max": 68
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "图纸之家 tuzhizhijia.com/fangchan/8468（2023 全国 43 份水电报价：上海 60/北京 68/深广 68/天津 58/长沙武汉 55/渝蓉 35/贵州 25-35/金华 50/杭州 40-50）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "图纸之家 tuzhizhijia.com/fangchan/8468（2023 全国 43 份水电报价：上海 60/北京 68/深广 68/天津 58/长沙武汉 55/渝蓉 35/贵州 25-35/金华 50/杭州 40-50）",
+        "effectiveFrom": "2026-08-28",
+        "effectiveTo": "2026-11-28",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-price-wall-paint",
+      "name": "墙面乳胶漆涂刷",
+      "numberClass": "analysis",
+      "unit": "元/㎡",
+      "valueKind": "range",
+      "value": {
+        "min": 10,
+        "max": 20
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "知乎 zhuanlan.zhihu.com/p/9402395749（10-20 元/㎡）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "知乎 zhuanlan.zhihu.com/p/9402395749（10-20 元/㎡）",
+        "effectiveFrom": "2026-08-27",
+        "effectiveTo": "2026-11-27",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-rug-size-rule",
+      "name": "客厅地毯短边",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 2200,
+        "max": 2800
+      },
+      "referencePlane": null,
+      "basisTag": "softdeco@v9",
+      "source": "【MOCK fixture，禁止入库】按本落点公式「沙发前沿外扩 [200,300]mm，短边不小于沙发长度」算；输入取 mock 定稿平面：三人沙发长 2200mm",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "【MOCK fixture，禁止入库】按本落点公式「沙发前沿外扩 [200,300]mm，短边不小于沙发长度」算；输入取 mock 定稿平面：三人沙发长 2200mm",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-shower-clear",
+      "name": "淋浴房内空",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "dimension",
+      "value": {
+        "depth": {
+          "min": 800
+        },
+        "width": {
+          "min": 800
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-sink-depth",
+      "name": "水槽深度",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "max": 220,
+        "min": 180
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-socket-height-common",
+      "name": "常用插座高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 300,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-sofa-table-gap",
+      "name": "沙发至茶几间距",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "max": 450,
+        "min": 350
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-storage-closed-ratio",
+      "name": "封闭收纳占比",
+      "numberClass": "analysis",
+      "unit": null,
+      "valueKind": "single",
+      "value": 0.8,
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": "行业通行（二八原则）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行（二八原则）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-storage-density-baseline",
+      "name": "收纳密度基准",
+      "numberClass": "analysis",
+      "unit": "米/㎡",
+      "valueKind": "range",
+      "value": {
+        "max": 0.35,
+        "min": 0.25
+      },
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": "内部规范 §5.7（基准值明确标注待校准）",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "内部规范 §5.7（基准值明确标注待校准）",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-storage-total-meters",
+      "name": "全屋收纳总长",
+      "numberClass": "analysis",
+      "unit": "米",
+      "valueKind": "range",
+      "value": {
+        "min": 26.4,
+        "max": 30.8
+      },
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": "【MOCK fixture，禁止入库】按本落点公式「Σ 各柜体投影沿墙长度」算；输入取 mock 定稿平面：套内 88㎡、柜体投影逐段量出",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "【MOCK fixture，禁止入库】按本落点公式「Σ 各柜体投影沿墙长度」算；输入取 mock 定稿平面：套内 88㎡、柜体投影逐段量出",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-switch-height",
+      "name": "开关高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 1300,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-toilet-center-offset",
+      "name": "马桶中线距侧墙",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 350
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-tv-distance",
+      "name": "电视观看距离",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 1800,
+        "max": 2400
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-wall-cabinet-bottom",
+      "name": "吊柜底沿距台面",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "max": 700,
+        "min": 600
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-wardrobe-front",
+      "name": "平开门衣柜前净距",
+      "numberClass": "analysis",
+      "unit": "mm",
+      "valueKind": "range",
+      "value": {
+        "min": 900
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-wardrobe-hang-fold-ratio",
+      "name": "衣柜挂/叠/抽比例",
+      "numberClass": "selection",
+      "unit": null,
+      "valueKind": "component",
+      "value": {
+        "fold": 0.3,
+        "hang": 0.5,
+        "drawer": 0.2
+      },
+      "referencePlane": null,
+      "basisTag": "storage@v10",
+      "source": null,
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": null,
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-wardrobe-rod",
+      "name": "衣柜挂杆高",
+      "numberClass": "selection",
+      "unit": "mm",
+      "valueKind": "single",
+      "value": 2136,
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    },
+    {
+      "lkpId": "lkp-work-triangle",
+      "name": "厨房工作三角周长",
+      "numberClass": "analysis",
+      "unit": "m",
+      "valueKind": "range",
+      "value": {
+        "max": 6.6,
+        "min": 3.6
+      },
+      "referencePlane": null,
+      "basisTag": "ergonomics@v10",
+      "source": "行业通行做法 + 内部规范 §5.2 转写",
+      "calibration": "draft",
+      "degraded": true,
+      "provenance": {
+        "source": "行业通行做法 + 内部规范 §5.2 转写",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "calibration": "draft",
+        "annotationRequired": true
+      },
+      "presentation": "REFERENCE_ONLY"
+    }
+  ],
+  "withheldAnchors": [],
+  "gaps": [],
+  "personasByDomain": {
+    "budget": [
+      {
+        "assetId": "persona-budget",
+        "identity": "你在帮这家人看懂钱花在哪，不替任何一方说话——你不是来替谁把这活谈成的。\n永远只给区间，永远不说某个数就能把活拿下来。比总数更值钱的是结构——哪一项占大头，为什么。\n",
+        "judgmentSamples": [
+          {
+            "bad": "这套下来就是这个数，拿着去谈，施工队不会再往上加。",
+            "good": "拆除这一项的单价落在 {lkp-price-demolition}，最后花多少还要看拆多少面墙——那个量还没算出来。",
+            "reason": "cr-price-commitment"
+          },
+          {
+            "bad": "我们对每一项支出都做了细致测算，这份预算是可信的。",
+            "good": "水电这类隐蔽项按点位计价，单价落在 {lkp-price-electrical-point}，对清单时最该逐条数的就是点位数。",
+            "reason": "cr-self-endorsement"
+          },
+          {
+            "bad": "主材这部分建议业主可以考虑适当控制一下。",
+            "good": "定制柜按投影面积计价，单价 {lkp-price-custom-cabinet}——做到哪一档，差别就在这个区间里。",
+            "reason": "cr-weak-word"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "lkp-budget-share"
+            ],
+            "predicate": "各分项占比"
+          },
+          {
+            "requires": [
+              "lkp-budget-share",
+              "lkp-budget-driver"
+            ],
+            "predicate": "哪一项最吃钱"
+          },
+          {
+            "requires": [
+              "lkp-budget-tier-gap"
+            ],
+            "predicate": "三档差在哪"
+          },
+          {
+            "requires": [
+              "lkp-price-demolition",
+              "lkp-price-electrical-point",
+              "lkp-price-custom-cabinet",
+              "lkp-price-hydro-labor-sqm",
+              "lkp-price-wall-paint"
+            ],
+            "predicate": "各工项单价行情"
+          }
+        ],
+        "bannedTerms": {
+          "deal": [
+            "总价",
+            "报价",
+            "这个价能做",
+            "包工包料",
+            "全包价"
+          ],
+          "inherit": "_common/banned-terms.yaml",
+          "unbacked_verdict": [
+            "性价比高",
+            "价格合理"
+          ]
+        },
+        "version": 1
+      }
+    ],
+    "ergonomics": [
+      {
+        "assetId": "persona-ergonomics",
+        "identity": "你在把这家人的身体尺寸翻译成家具尺寸。读者是这家人本人，他们要拿这张表去找定制商对尺寸。\n说\"你\"，不说\"业主\"和\"使用者\"。尺寸后面永远跟一句\"这样你做什么的时候会怎样\"。\n只写输入里给了的人和事：**输入没给家庭构成，就一个家庭成员都不许提**——不许出现\"你太太\"\n\"你先生\"\"孩子\"\"老人\"\"家人\"这类称呼，也不许假设谁做饭、谁起夜。需要提到使用者时只说\"你\"。\n",
+        "judgmentSamples": [
+          {
+            "bad": "台面高度按行业通行做法取值，符合人体尺度要求。",
+            "good": "台面定在 {lkp-counter-height}，你切菜时手腕是平的，不用弓着腰。",
+            "reason": "cr-methodology-language"
+          },
+          {
+            "bad": "主通道宽度建议业主可以考虑留足一些。",
+            "good": "客厅到厨房这条路留够 {lkp-passage-main}，端着汤走过去不用侧身。",
+            "reason": "cr-weak-word"
+          },
+          {
+            "bad": "衣柜挂杆高度按身高系数折算得出。",
+            "good": "挂杆定在 {lkp-wardrobe-rod}，冬天的长外套挂上去下摆不扫地。",
+            "reason": "cr-unit-translation"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "lkp-counter-height"
+            ],
+            "predicate": "台面高度"
+          },
+          {
+            "requires": [
+              "lkp-passage-main",
+              "lkp-passage-secondary"
+            ],
+            "predicate": "通道净宽是否够"
+          },
+          {
+            "requires": [
+              "lkp-work-triangle"
+            ],
+            "predicate": "厨房动线是否合理"
+          },
+          {
+            "requires": [
+              "lkp-passage-main",
+              "lkp-passage-secondary",
+              "lkp-bed-side",
+              "lkp-wardrobe-front"
+            ],
+            "predicate": "校核是否通过"
+          }
+        ],
+        "bannedTerms": {
+          "inherit": "_common/banned-terms.yaml",
+          "domain_extra": [
+            "人体工程学",
+            "舒适区",
+            "符合标准",
+            "净宽"
+          ]
+        },
+        "version": 1
+      }
+    ],
+    "lighting": [
+      {
+        "assetId": "persona-lighting",
+        "identity": "你在为这一家人写他们家的灯光方案。不是写给同行看的，不是写给自己看的。\n读者是这家人本人，没有设计知识，正在决定要不要按这份方案去买灯、去改线路。\n人称：说\"你\"，不说\"业主\"，不说\"我们建议\"。\n",
+        "judgmentSamples": [
+          {
+            "bad": "客厅建议业主可以考虑采用分层照明的手法。",
+            "good": "起居这片的亮度锚在 {lkp-illuminance-living}，沙发那盏读书灯再往上抬——不分层，晚上就只有一种亮法。",
+            "reason": "cr-weak-word"
+          },
+          {
+            "bad": "重点照明与环境照明的比值按人因工程学结论取值。",
+            "good": "沙发那盏灯要比屋里的整体亮度亮出 {lkp-accent-ratio}，才不费眼。",
+            "reason": "cr-methodology-language"
+          },
+          {
+            "bad": "本次色温经过反复比选后最终确定。",
+            "good": "全屋色温定在 {lkp-cct-living}，晚上回家开灯的第一眼是暖的。",
+            "reason": "cr-self-referential"
+          },
+          {
+            "bad": "餐厅吊灯安装高度取标准区间值。",
+            "good": "餐桌那盏灯吊到坐下抬头不刺眼、起身不撞头的高度（具体尺寸在选型表里）。",
+            "reason": "cr-unit-translation"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "lkp-accent-ratio"
+            ],
+            "predicate": "重点照明照度倍数"
+          },
+          {
+            "requires": [
+              "lkp-cct-variety-max"
+            ],
+            "predicate": "全屋色温种类上限"
+          },
+          {
+            "requires": [
+              "lkp-cct-living",
+              "lkp-cct-task",
+              "lkp-cct-night"
+            ],
+            "predicate": "色温分区"
+          },
+          {
+            "requires": [
+              "lkp-cri-living"
+            ],
+            "predicate": "显色指数下限"
+          }
+        ],
+        "bannedTerms": {
+          "jargon": [
+            "照度",
+            "显指",
+            "光通量",
+            "眩光值"
+          ],
+          "inherit": "_common/banned-terms.yaml"
+        },
+        "version": 1
+      }
+    ],
+    "material": [
+      {
+        "assetId": "persona-material",
+        "identity": "你在替这家人挑材料，也在替他们挡掉不该买的。读者拿这份去跟装企和定制商对词。\n说材料要说\"它在你家会怎样\"，不说\"该材料具有优异的耐磨性能\"。\n打理意愿这类采集答案**只有输入里真给了才引用**（引用得能对上原话）；输入没给就不许假设他们\n怕不怕麻烦、有没有宠物、几口人——宁可不提，不许编：个性化的正当性来自 triggered_by 溯源，\n编出来的\"因为你说过\"是这条信任机制的反面。\n",
+        "judgmentSamples": [
+          {
+            "bad": "岩板兼具耐磨与耐污特性，是理想的台面材料。",
+            "good": "它的好处落在你每天会做的动作上：热锅直接放，刀划不出印子。",
+            "reason": "cr-methodology-language"
+          },
+          {
+            "bad": "橱柜门板建议业主可以考虑选用封闭漆工艺。",
+            "good": "柜门用封闭漆——开放漆的木纹缝里会存油，擦不干净。",
+            "reason": "cr-weak-word"
+          },
+          {
+            "bad": "该布料的耐磨转数达到行业高标。",
+            "good": "这块布猫抓不坏，具体的耐磨数值在选型表里。",
+            "reason": "cr-unit-translation"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "attr-material-card"
+            ],
+            "predicate": "材质是否适合该场景"
+          },
+          {
+            "requires": [
+              "lkp-material-variety-max"
+            ],
+            "predicate": "全屋材质种类是否超标"
+          },
+          {
+            "requires": [
+              "attr-material-card",
+              "attr-unit-price"
+            ],
+            "predicate": "三档替代的差在哪"
+          }
+        ],
+        "bannedTerms": {
+          "inherit": "_common/banned-terms.yaml",
+          "domain_extra": [
+            "优异",
+            "高端大气",
+            "质感非凡",
+            "马丁代尔",
+            "耐磨等级"
+          ]
+        },
+        "version": 1
+      }
+    ],
+    "softdeco": [
+      {
+        "assetId": "persona-softdeco",
+        "identity": "你在说这个家看起来是什么感觉。这是全报告里唯一允许写氛围的地方，但氛围也得落到能买的东西上。\n色彩偏好是他们在图上选出来的，不是问出来的——引用他们的选择，别替他们定义品味。\n**输入里没有选色结果时，一句偏好都不许写**——\"你喜欢暖色\"这种话没人说过，是编的。\n",
+        "judgmentSamples": [
+          {
+            "bad": "本案主调沉静克制，居住体验高级而舒适。",
+            "good": "它会把窗外的光压得柔一点，傍晚回家的第一眼不刺。",
+            "reason": "cr-self-referential"
+          },
+          {
+            "bad": "窗帘建议业主可以考虑选择遮光率较高的产品。",
+            "good": "主卧窗帘按 {lkp-blackout-rate} 这一档做，天亮得早的季节人才不会跟着醒。",
+            "reason": "cr-weak-word"
+          },
+          {
+            "bad": "配色遵循主辅点三段式比例原则。",
+            "good": "大面积留给主色，木色做配，跳色只放在抱枕和画上——比例按 {lkp-color-ratio} 收。",
+            "reason": "cr-methodology-language"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "lkp-color-ratio"
+            ],
+            "predicate": "配色比例"
+          },
+          {
+            "requires": [
+              "lkp-color-main-max"
+            ],
+            "predicate": "主色数量是否超标"
+          },
+          {
+            "requires": [
+              "lkp-blackout-rate"
+            ],
+            "predicate": "窗帘遮光选择"
+          },
+          {
+            "requires": [
+              "lkp-rug-size-rule"
+            ],
+            "predicate": "地毯尺寸"
+          }
+        ],
+        "bannedTerms": {
+          "inherit": "_common/banned-terms.yaml",
+          "domain_extra": [
+            "高级灰",
+            "北欧风情",
+            "轻奢",
+            "营造",
+            "氛围感",
+            "文化元素",
+            "黄金比例"
+          ]
+        },
+        "version": 1
+      }
+    ],
+    "storage": [
+      {
+        "assetId": "persona-storage",
+        "identity": "你在算这家人的东西放不放得下。先给判断——够还是不够，再说怎么办。\n行李箱、囤货习惯、衣物量这些盘点数字，**输入里给了才写进结论**；没给就直说这一项还没盘，\n不许替他们估一个数——编出来的盘点数会被当成他们自己报的。\n",
+        "judgmentSamples": [
+          {
+            "bad": "收纳容量建议业主可以考虑再增加一些。",
+            "good": "按 {lkp-storage-total-meters} 这个总量算，差的那一截要落到具体位置上——先补最先塞不下的那处。",
+            "reason": "cr-weak-word"
+          },
+          {
+            "bad": "全屋收纳密度低于推荐基准值。",
+            "good": "它比同样大小的家少了一截，最先塞不下的是换季的被褥。",
+            "reason": "cr-unit-translation"
+          },
+          {
+            "bad": "封闭与开放的配比按通行原则取值。",
+            "good": "大部分做门关起来，只留一小片开放的放常用——藏露比按 {lkp-storage-closed-ratio} 收。",
+            "reason": "cr-methodology-language"
+          }
+        ],
+        "assertionBudget": [
+          {
+            "requires": [
+              "lkp-storage-density-baseline",
+              "lkp-storage-total-meters"
+            ],
+            "predicate": "收纳够不够"
+          },
+          {
+            "requires": [
+              "lkp-storage-closed-ratio"
+            ],
+            "predicate": "藏露比例"
+          },
+          {
+            "requires": [
+              "lkp-wardrobe-hang-fold-ratio"
+            ],
+            "predicate": "柜内配比例"
+          }
+        ],
+        "bannedTerms": {
+          "inherit": "_common/banned-terms.yaml",
+          "domain_extra": [
+            "延米",
+            "收纳系统",
+            "储物需求",
+            "二八原则"
+          ]
+        },
+        "version": 1
+      }
+    ]
+  },
+  "checksByDomain": {
+    "budget": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-budget-disclaimer",
+        "checkType": "presence_require",
+        "scope": [
+          "册级",
+          "art-budget-chapter"
+        ],
+        "pattern": null,
+        "requirement": "DISCLAIM_PRICE 锁定文案必挂（gen-locked，引用文案 ID）",
+        "message": "造价章缺 DISCLAIM_PRICE",
+        "decidedBy": "规范规则 5.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-budget-no-commerce",
+        "checkType": "field_deny",
+        "scope": [
+          "art-budget-chapter"
+        ],
+        "pattern": null,
+        "requirement": "本章不得出现任何商品挂载",
+        "message": "监督类产物植入商品",
+        "decidedBy": "规范规则 9.2（监督/博弈类产物中立性禁令）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-budget-range-width",
+        "checkType": "cross_field",
+        "scope": [
+          "art-budget-chapter"
+        ],
+        "pattern": null,
+        "requirement": "区间宽度须与该条 confidence 匹配（lkp-budget-confidence-width）",
+        "message": "低置信数据给了窄区间",
+        "decidedBy": "规范规则 5.15（区间宽度随置信调整，用户裁决 2026-08-23）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-budget-stale-price",
+        "checkType": "cross_field",
+        "scope": [
+          "art-budget-chapter"
+        ],
+        "pattern": null,
+        "requirement": "任一消费的 attr-price-* 若 effective_to 越界，金额照常出，但该页必须挂它的取数时间与来源标注（provenance.annotationRequired 已在求值线判定，页级标注比对门禁执行）",
+        "message": "过期单价出了金额却没标取数时间与来源",
+        "decidedBy": "规范规则 5.15（v2.4 裁决 2026-08-29：过期照常出金额+标注取数时间，原「仅出结构占比」作废）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-price-commitment",
+        "checkType": "regex_deny",
+        "scope": [
+          "art-budget-chapter"
+        ],
+        "pattern": "总价|全包价|这个价能做|包工包料|约为\\s*\\d+\\s*万",
+        "requirement": null,
+        "message": "本章禁精确总价与成交承诺",
+        "decidedBy": "规范规则 5.15（用户裁决 2026-08-23）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ],
+    "ergonomics": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-ergo-passage-pass",
+        "checkType": "threshold_all",
+        "scope": [
+          "art-plan-final"
+        ],
+        "pattern": null,
+        "requirement": "12 项通道校核逐项与 lkp-* 比对；未过项置顶并在 art-plan-final 标注位置（规则 5.4）",
+        "message": "人体工学校核未过项未置顶",
+        "decidedBy": "规范规则 5.4",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-ergo-size-source",
+        "checkType": "cross_field",
+        "scope": [
+          "art-ergonomics-chapter"
+        ],
+        "pattern": null,
+        "requirement": "每项定制尺寸须带 source（parameter 形态）",
+        "message": "定制尺寸缺 source",
+        "decidedBy": "规范规则 5.4/4.10",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-ergo-size-table-expanded",
+        "checkType": "presentation",
+        "scope": [
+          "art-ergonomics-chapter"
+        ],
+        "pattern": null,
+        "requirement": "定制尺寸表恒展开，不得折叠——它是表达件不是校核结论（规则 5.4）",
+        "message": "定制尺寸表被折叠",
+        "decidedBy": "规范规则 5.4",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ],
+    "lighting": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-cct-variety",
+        "checkType": "count_max",
+        "scope": [
+          "art-lighting-chapter"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "全屋色温种类超过上限",
+        "decidedBy": "规范规则 5.1",
+        "thresholdRefs": [
+          "lkp-cct-variety-max"
+        ],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-lighting-no-number-on-plan",
+        "checkType": "field_deny",
+        "scope": [
+          "art-ceiling-lighting-plan"
+        ],
+        "pattern": null,
+        "requirement": "灯位图内不得出现安装高度、间距等定位数字，符号旁仅标条目编号（规则 3.3）",
+        "message": "prec-schematic 灯位图出现定位数字",
+        "decidedBy": "规范规则 2.2/3.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-lighting-scene-modes",
+        "checkType": "presentation",
+        "scope": [
+          "art-lighting-chapter"
+        ],
+        "pattern": null,
+        "requirement": "场景模式须给回路分组示意（会客/观影/夜起三模式），不出参数表（规则 5.1）",
+        "message": "场景模式缺回路分组或混入参数表",
+        "decidedBy": "规范规则 5.1",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ],
+    "material": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-material-aging-downgrade",
+        "checkType": "cross_field",
+        "scope": [
+          "art-material-chapter"
+        ],
+        "pattern": null,
+        "requirement": "aging_2y 属性恒为经验条目，只能以参考形态出现，禁作判断句（规则 4.10a）",
+        "message": "经验条目被用作判断句",
+        "decidedBy": "规范规则 4.10a",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-material-spec-word",
+        "checkType": "pattern_require",
+        "scope": [
+          "art-material-chapter",
+          "art-purchase-checklist"
+        ],
+        "pattern": null,
+        "requirement": "材质词须为规格化形态：品类+风格+材质规格+颜色+尺寸（规则 5.10）",
+        "message": "材质词未规格化",
+        "decidedBy": "规范规则 5.10",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-material-variety",
+        "checkType": "count_max",
+        "scope": [
+          "art-material-chapter"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "全屋主材种类超上限",
+        "decidedBy": "规范规则 5.11",
+        "thresholdRefs": [
+          "lkp-material-variety-max"
+        ],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ],
+    "softdeco": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-softdeco-color-collect-visual",
+        "checkType": "cross_field",
+        "scope": [
+          "需求采集"
+        ],
+        "pattern": null,
+        "requirement": "色彩偏好必须经 H5 视觉网格采集，禁止文字问色彩（规则 5.14/6.4）",
+        "message": "文字问色彩",
+        "decidedBy": "规范规则 5.14/6.4",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-softdeco-main-color-count",
+        "checkType": "count_max",
+        "scope": [
+          "art-color-soft-chapter"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "全屋主色数量超上限",
+        "decidedBy": "规范规则 5.14",
+        "thresholdRefs": [
+          "lkp-color-main-max"
+        ],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-softdeco-mode-split",
+        "checkType": "cross_field",
+        "scope": [
+          "art-color-soft-chapter"
+        ],
+        "pattern": null,
+        "requirement": "情绪叙事=gen-generated，数据与清单=gen-evaluated/gen-assembled，组合矩阵不破（规则 2.5）",
+        "message": "生成方式越档",
+        "decidedBy": "规范规则 2.5",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-softdeco-render-color-match",
+        "checkType": "cross_field",
+        "scope": [
+          "art-color-soft-chapter",
+          "art-space-render"
+        ],
+        "pattern": null,
+        "requirement": "章内色彩方案与效果图取色一致",
+        "message": "色彩方案与效果图不一致",
+        "decidedBy": "规范规则 5.14",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ],
+    "storage": [
+      {
+        "assetId": "cr-anchor-out-of-scope",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "判断句的支点只在该落点自身名称与定义覆盖的对象上成立。违规＝把某个落点的数或结论按到它对象之外的空间、人群或场景头上（如用起居空间的显色指数背书走廊、餐厅、厨房）。**多个落点同属一个主题、各自背书各自对象、并列出现在同一句或同一张卡，不是外推，不报**；落点之间被写成'必须一起定/互相制约'式耦合关系的，属伪因果，不归本判据，也不在此报",
+        "message": "断言射程外推：把一个落点的数或结论按到它对象之外的空间/人群/场景头上（规则 5.8/4.10a）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；用户裁决 2026-08-28（真跑样本自建）+ 2026-08-29 晚收窄（规范 v2.5 §14.10：同主题并列不算外推）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你家起居室、卧室、走廊、餐厅、厨房一般活动区、卫生间的日常活动区域，灯光显色指数不能低于 {lkp-cri-living}。",
+            "why": "该卡 assertions 声明了「显色指数下限」，其唯一支点 lkp-cri-living 名称即「起居空间显色指数下限」，只背书起居/卧室。把它作为走廊/餐厅/厨房/卫生间的判断句支点＝用一个落点背书它射程之外的断言，违规则 5.8 与 4.10a。机检 gate-assertion-unbacked 只校验 requires 的 lkp- 是否存在且非降档，不校验射程——结构上判不了，判官层专属。",
+            "fixed": "你家起居室和卧室的灯光，显色指数不能低于 {lkp-cri-living}。走廊、餐厅、厨房、卫生间另有各自的要求，在选型表里分开列。"
+          }
+        ],
+        "status": "observing",
+        "version": 2
+      },
+      {
+        "assetId": "cr-assertion-backed",
+        "checkType": "cross_field",
+        "scope": [
+          "正文"
+        ],
+        "pattern": null,
+        "requirement": "判断句谓词须在该域 persona.assertion_budget 内，且其 requires 的 lkp-* 已求值、且为 calibrated（过可核性门——未过门的落点照常进正文，但撑不起判断句背书）",
+        "message": "无计算背书的判断句（规则 5.8）",
+        "decidedBy": "规范规则 5.8 + 规则 4.10a；v2.4 裁决 2026-08-29（承接 cr-draft-not-in-paid 退役后仍有效的语义）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 2
+      },
+      {
+        "assetId": "cr-bound-word-before-placeholder",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": null,
+        "message": "占位符前禁边界词——单边界值的措辞（不低于/不超过）由渲染层按值形态出，文句再带一遍即叠字（真跑立案：「不少于不低于 750 mm」一册 7 处）",
+        "decidedBy": "用户裁决 2026-08-29 晚（单边界措辞归渲染层：边界语义在值里，只说一次）；2026-08-30 换载体退役，语义由 reportgen gate-bound-word-before-ref / gate-unit-after-ref 承接",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-draft-not-in-paid",
+        "checkType": "cross_field",
+        "scope": [
+          "PAID 产物"
+        ],
+        "pattern": null,
+        "requirement": "calibration=draft 的条目不得作判断句背书，只能降档呈现",
+        "message": "未校准资产进入 PAID 判断句（规则 4.10/4.10a）",
+        "decidedBy": "规范规则 4.10/4.10a；v2.4 裁决 2026-08-29 整条退役（隐藏档取消，语义由 cr-assertion-backed 承接）",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "retired",
+        "version": 2
+      },
+      {
+        "assetId": "cr-fabricated-fact",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "关于这家人的事实（家庭构成、成员关系、职业、作息、既有物品）只能来自匿名画像与落点对象；画像里没有的一律不许写，假设句式也不行",
+        "message": "编造输入之外的家庭事实（规则 4.3 溯源纪律；图 v0.2 §0 匿名画像即输入全集）",
+        "decidedBy": "规范规则 4.3 + 图 v0.2 §0；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "你和你太太",
+            "why": "匿名画像里只有身高族与户型特征，没有任何家庭构成信息——「太太」是模型自己添的一个人。业主读到的是「系统知道我家有谁」，而系统并不知道；这正是规则 4.3 信任机制的反向运行。",
+            "fixed": "两个人同时用的时候"
+          },
+          {
+            "bad": "家里有老人或小孩",
+            "why": "同一种编造换成假设句：画像没给家庭成员构成，「有老人或小孩」把没有的输入当成有。加不加「如果」不改变它凭空引入了一条这家人的事实。",
+            "fixed": "如果还有别的常用者，这个尺寸要另算"
+          },
+          {
+            "bad": "比如沙发面料的纹理、孩子的画作、食物的颜色，都会更准确。",
+            "why": "匿名画像字段全集只有身高族 + layoutFeatures，无家庭构成，「孩子」是无中生有。违规则 4.3（个性化必须锚 triggered_by，「你说过的话变成了图上的东西」是 stage-project 核心信任机制，凭空捏造是它的反面）与图 v0.2 §0（生成侧不知用户是谁）。本句出自真跑 r13 的 verdict=ok 成品——机检全绿仍带此缺陷，机检全绿≠内容可发在真实链路上一次都没有成立过。",
+            "fixed": "比如沙发面料的纹理、衣服的颜色、饭菜的成色，在这种光下都更接近本来的样子。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-methodology-language",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "依据|推导|验收标准|本方案|经严谨|综合考量",
+        "requirement": null,
+        "message": "方法论元语言外泄（规则 4.15）",
+        "decidedBy": "规范规则 4.15",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-no-position-number-on-schematic",
+        "checkType": "field_deny",
+        "scope": [
+          "prec-schematic"
+        ],
+        "pattern": null,
+        "requirement": "prec-schematic 图纸内不得出现任何定位数字",
+        "message": "prec-schematic 禁定位数字（规则 2.2）",
+        "decidedBy": "规范规则 2.2",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-self-endorsement",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "结论的来源与可靠性不由正文自述。落点的依据在落点对象里，正文只给结论与它的生活后果。任何'这个数不是凭感觉/不是随便定的''是根据……确定的''是经过验证的'式自我背书都算违规，换个词面不改变性质；尤其禁止宣称结论来自使用反馈、实际验证或大量案例——冷启动期系统内没有这种信号，宣称它存在即虚构系统能力",
+        "message": "自证式依据宣称（规则 1.6 无计算依据的术语堆砌；规则 4.18 冷启动期零行为信号，'使用反馈'类来源不存在）",
+        "decidedBy": "规范规则 1.6 + 规则 4.18；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "这个倍数不是凭感觉定的，是根据人眼对明暗对比的实际响应确定的。",
+            "why": "lkp-accent-ratio 的背书是过了可核性门的国标条文，不是「人眼对明暗对比的实际响应」这一自造机理。属规则 1.6 明文禁止的伪专业形态（空泛概念叙事＋无计算依据的术语堆砌）。机检 cr-methodology-language 收的是字面词表，模型已演化出整套绕开词表的同义变体，本句一个禁词都没踩，进了 verdict=ok 成品。",
+            "fixed": "删掉自我背书，只留结论与生活后果。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-storage-baseline-draft",
+        "checkType": "cross_field",
+        "scope": [
+          "art-storage-chapter"
+        ],
+        "pattern": null,
+        "requirement": "lkp-storage-density-baseline 为 draft，结论须降档为区间表述，禁绝对判断",
+        "message": "以未校准基准下绝对判断",
+        "decidedBy": "规范规则 4.10a",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-storage-verdict-first",
+        "checkType": "presentation",
+        "scope": [
+          "art-storage-chapter"
+        ],
+        "pattern": null,
+        "requirement": "容量账须先给'够/不够'判断句，再列明细（规则 5.13）",
+        "message": "收纳容量账未先给判断",
+        "decidedBy": "规范规则 5.13",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-undeclared-assertion",
+        "checkType": "semantic_judge",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": null,
+        "requirement": "参考级落点（未过可核性门、随包下发为降档档位的）只能以参考口吻出现：给区间、给'这取决于什么'、给'还算不出来'。不得写成结论，不得把区间自行收窄成点值。是不是断言看句子怎么说，不看卡片有没有声明 assertions——没声明不等于不是断言",
+        "message": "参考口吻被写成断言（规则 4.10c：未过门落点撑不起判断句；机检只保证'声明了就必须有背书'）",
+        "decidedBy": "规范规则 4.10c + 规则 5.8；用户裁决 2026-08-28（判官反例库改由冷启动真跑样本自建）",
+        "thresholdRefs": [],
+        "examples": [
+          {
+            "bad": "拆改、水电、泥木这三项通常构成前期硬装主力，而主材与定制往往占去近半支出。",
+            "why": "本轮 backed_predicates=[]，prompt 已逐字告知「各分项占比」这轮不许下结论；唯一支点 lkp-budget-share 是 REFERENCE_ONLY（draft），按规则 4.10c 只能参考口吻、不得作判断支点。此句以「构成主力」「占去近半」下了占比结论，且把两条区间自行收窄成点值「近半」——规则 4.10c 禁止的「引擎自己编数字」的对称形态。因为 assertions=[]，机检全线放过，一稿即过成为 verdict=ok 成品。",
+            "fixed": "每一项占多少，目前只能给参考区间，区间在表里逐项列。哪一项最后吃掉最多，取决于定制的延米数——这个数还没算出来。"
+          }
+        ],
+        "status": "observing",
+        "version": 1
+      },
+      {
+        "assetId": "cr-unit-translation",
+        "checkType": "regex_require_annotation",
+        "scope": [
+          "正文"
+        ],
+        "pattern": "\\d+\\s?(mm|lx|K|Ra|°|延米|㎡)",
+        "requirement": "同句须有生活化括注，或该数字只出现在选型表/图中",
+        "message": "工程量纲未翻译（规则 2.3）",
+        "decidedBy": "规范规则 2.3",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      },
+      {
+        "assetId": "cr-weak-word",
+        "checkType": "regex_deny",
+        "scope": [
+          "正文",
+          "结论句"
+        ],
+        "pattern": "可能|建议考虑|也许|宜(?![居])|尽量|视情况",
+        "requirement": null,
+        "message": "分析级结论句禁弱词（规则 5.9）",
+        "decidedBy": "规范规则 5.9",
+        "thresholdRefs": [],
+        "examples": [],
+        "status": "active",
+        "version": 1
+      }
+    ]
+  },
+  "triggeredRulesByDomain": {
+    "budget": [
+      {
+        "assetId": "rule-practice-budget-hidden-item-warning",
+        "layer": "tier-practice",
+        "content": "列常见低报高增项（联动 art-quotation-checklist）",
+        "rationale": "签约时报低、施工中增项是最常见的博弈点",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      }
+    ],
+    "ergonomics": [],
+    "lighting": [
+      {
+        "assetId": "rule-practice-lighting-bedhead-no-direct",
+        "layer": "tier-practice",
+        "content": "床头区域禁止筒灯直射",
+        "rationale": "躺下时正对光源，眼睛难受",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      },
+      {
+        "assetId": "rule-practice-lighting-bedroom-dual-control",
+        "layer": "tier-practice",
+        "content": "卧室主照明双控（门口与床头各一处）",
+        "rationale": "夜间起身不必摸黑走到门口",
+        "severity": "recommended",
+        "calibration": "calibrated",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      },
+      {
+        "assetId": "rule-practice-lighting-cct-variety-cap",
+        "layer": "tier-practice",
+        "content": "全屋色温种类不超过 3 种",
+        "rationale": "色温杂乱是家里显廉价的第一来源",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      }
+    ],
+    "material": [
+      {
+        "assetId": "rule-practice-material-changhong-glass-not-in-bath",
+        "layer": "tier-practice",
+        "content": "卫浴隔断禁长虹玻璃",
+        "rationale": "透光不透形只在远处成立，近距离仍有轮廓",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      },
+      {
+        "assetId": "rule-practice-material-open-lacquer-not-in-grease",
+        "layer": "tier-practice",
+        "content": "油烟区柜门禁开放漆",
+        "rationale": "木纹缝存油，擦不出来",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      }
+    ],
+    "softdeco": [],
+    "storage": [
+      {
+        "assetId": "rule-practice-storage-entry-parcel",
+        "layer": "tier-practice",
+        "content": "玄关设快递拆包位（台面或翻板）",
+        "rationale": "拆包在门口完成，纸箱不进屋",
+        "severity": "recommended",
+        "calibration": "draft",
+        "triggeredBy": {
+          "type": "always",
+          "feature": null,
+          "evidence": null
+        }
+      }
+    ]
+  },
+  "bannedTermsByDomain": {
+    "budget": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ],
+    "ergonomics": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ],
+    "lighting": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ],
+    "material": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ],
+    "softdeco": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ],
+    "storage": [
+      "一定不会",
+      "也许",
+      "作业范围",
+      "依据",
+      "保证",
+      "免责",
+      "可能",
+      "宜",
+      "尽量",
+      "建议考虑",
+      "承诺",
+      "推导",
+      "无风险",
+      "本方案",
+      "由业主自行承担",
+      "确保效果",
+      "经严谨",
+      "综合考量",
+      "视情况",
+      "责任",
+      "验收标准"
+    ]
+  },
+  "bannedTermGroupsByDomain": {
+    "budget": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    },
+    "ergonomics": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    },
+    "lighting": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    },
+    "material": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    },
+    "softdeco": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    },
+    "storage": {
+      "responsibility": [
+        "免责",
+        "由业主自行承担",
+        "责任"
+      ],
+      "overreach": [
+        "一定不会",
+        "保证",
+        "承诺",
+        "无风险",
+        "确保效果"
+      ],
+      "weak": [
+        "也许",
+        "可能",
+        "宜",
+        "尽量",
+        "建议考虑",
+        "视情况"
+      ],
+      "methodology": [
+        "作业范围",
+        "依据",
+        "推导",
+        "本方案",
+        "经严谨",
+        "综合考量",
+        "验收标准"
+      ]
+    }
+  },
+  "lockedTextsByDomain": {},
+  "anonymousProfile": {
+    "chiefHeightMm": 1700,
+    "tallestHeightMm": 1780,
+    "eyeHeightMm": 1600,
+    "tvScreenHeightMm": 600,
+    "layoutFeatures": {
+      "kitchen_shape": "U",
+      "entrance_shape": "side",
+      "sunken_bathroom": "true"
+    },
+    "cityTier": "一线",
+    "buildingAreaSqm": 110.0,
+    "floorAreaRatioPercent": 80
+  }
+}

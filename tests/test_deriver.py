@@ -438,9 +438,11 @@ def test_gap_block_forbids_writing_about_it_at_all() -> None:
     要么这件事根本不进报告（规则 4.18 宁薄勿撑）。缺口只作为"别编它"的禁令下发。
     """
     request = copy.deepcopy(request_for())
-    request.gaps = [GapRecord(
+    request.gaps = [
+        GapRecord(
             lkp_id="lkp-rug-size-rule", basis_tag="softdeco@v9", reason="formula_not_implemented"
-        )]
+        )
+    ]
     user = build_derive_messages(request)[1]["content"]
     assert "没有值" in user and "不许为它单独写一张卡" in user, "缺口不该变成可写的题材"
     assert "等你确认" in user and "我们下一步补给你" in user and "不许写成" in user, (
