@@ -281,6 +281,11 @@ class EvaluationProfile(_PackageModel):
     tv_screen_height_mm: int | None = None
     layout_features: dict[str, str] = {}
     city_tier: str | None = None
+    # 2026-08-31 生产侧新加：建筑面积 × 得房率 = 套内面积，报告里一切"量"的地基（求值线用它算出
+    # 全屋收纳总长，第一条真的量）。本层不直接用，但 extra="forbid" 下**少声明一个整包就解析失败**
+    # ——坑单第一条，今天又踩了一次（生产侧加完派发，六章全部 Failed decoding arguments）。
+    building_area_sqm: float | None = None
+    floor_area_ratio_percent: int | None = None
 
 
 class ReportDataPackage(_PackageModel):
