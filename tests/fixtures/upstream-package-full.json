@@ -135,10 +135,10 @@
       "lkpId": "lkp-blackout-rate",
       "name": "卧室窗帘遮光率",
       "numberClass": "selection",
-      "unit": "比率",
+      "unit": "%",
       "valueKind": "range",
       "value": {
-        "min": 0.9
+        "min": 90
       },
       "referencePlane": null,
       "basisTag": "softdeco@v9",
@@ -217,36 +217,36 @@
       "lkpId": "lkp-budget-share",
       "name": "分项造价占比带",
       "numberClass": "analysis",
-      "unit": null,
+      "unit": "%",
       "valueKind": "component",
       "value": {
         "painting": {
-          "max": 0.1,
-          "min": 0.05
+          "max": 10,
+          "min": 5
         },
         "demolition": {
-          "max": 0.08,
-          "min": 0.03
+          "max": 8,
+          "min": 3
         },
         "main-material": {
-          "max": 0.35,
-          "min": 0.2
+          "max": 35,
+          "min": 20
         },
         "soft-furnishing": {
-          "max": 0.2,
-          "min": 0.08
+          "max": 20,
+          "min": 8
         },
         "custom-cabinetry": {
-          "max": 0.35,
-          "min": 0.2
+          "max": 35,
+          "min": 20
         },
         "masonry-carpentry": {
-          "max": 0.25,
-          "min": 0.15
+          "max": 25,
+          "min": 15
         },
         "plumbing-electrical": {
-          "max": 0.15,
-          "min": 0.08
+          "max": 15,
+          "min": 8
         }
       },
       "referencePlane": null,
@@ -427,12 +427,12 @@
       "lkpId": "lkp-color-ratio",
       "name": "主辅点缀配色比例",
       "numberClass": "analysis",
-      "unit": null,
+      "unit": "%",
       "valueKind": "component",
       "value": {
-        "main": 0.6,
-        "accent": 0.1,
-        "secondary": 0.3
+        "main": 60,
+        "accent": 10,
+        "secondary": 30
       },
       "referencePlane": null,
       "basisTag": "softdeco@v9",
@@ -852,11 +852,11 @@
       "lkpId": "lkp-material-warm-cool-ratio",
       "name": "冷暖材质比例带",
       "numberClass": "analysis",
-      "unit": null,
+      "unit": "%",
       "valueKind": "range",
       "value": {
-        "max": 0.7,
-        "min": 0.3
+        "max": 70,
+        "min": 30
       },
       "referencePlane": null,
       "basisTag": "material@v9",
@@ -1184,9 +1184,9 @@
       "lkpId": "lkp-storage-closed-ratio",
       "name": "封闭收纳占比",
       "numberClass": "analysis",
-      "unit": null,
+      "unit": "%",
       "valueKind": "single",
-      "value": 0.8,
+      "value": 80,
       "referencePlane": null,
       "basisTag": "storage@v10",
       "source": "行业通行（二八原则）",
@@ -1368,12 +1368,12 @@
       "lkpId": "lkp-wardrobe-hang-fold-ratio",
       "name": "衣柜挂/叠/抽比例",
       "numberClass": "selection",
-      "unit": null,
+      "unit": "%",
       "valueKind": "component",
       "value": {
-        "fold": 0.3,
-        "hang": 0.5,
-        "drawer": 0.2
+        "fold": 30,
+        "hang": 50,
+        "drawer": 20
       },
       "referencePlane": null,
       "basisTag": "storage@v10",

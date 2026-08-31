@@ -184,6 +184,17 @@ def judgment_pairs(
     return pairs
 
 
+# 符号类单位紧排（用户裁决 2026-08-31，随"比率改百分数"同批）：中文单位与数之间留一格
+# （`3 种`），`%` 不留（`80%` 不是 `80 %`）。**排版不是换算**，一个数都没动。
+# 闭集登记不用字符规则，射程只到 `%`——与渲染层 anchor_text.join_unit 逐字同一套；
+# 那边的注释是本条的权威处，改这里必须同批改那边（下一行注释说的"两处"就是这两处）。
+_TIGHT_UNITS = {"%"}
+
+
+def _join_unit(text: str, unit: str) -> str:
+    return f"{text}{unit}" if unit in _TIGHT_UNITS else f"{text} {unit}"
+
+
 # 读者看到的样子＝值 + 单位（用户裁决 2026-08-30 晚："你写"与"读者看到"并排给出来）。
 # **这是渲染层那条规则在本仓的第二处实现**（坑单第 10 条同型，已知代价非疏忽）：要在下发行里
 # 逐字写出记号会变成什么，就绕不开拼一次"数+单位"。两处都改才算改完。并列场合不拼
@@ -197,7 +208,7 @@ def _reader_sees(anchor: ReportAnchor, value: object) -> str:
         )
     else:
         body = str(value)
-    return f"{body} {anchor.unit}" if anchor.unit else body
+    return _join_unit(body, anchor.unit) if anchor.unit else body
 
 
 def _wording_note(anchor: ReportAnchor) -> list[str]:
@@ -212,7 +223,7 @@ def _wording_note(anchor: ReportAnchor) -> list[str]:
     不用再讲"别写单位"那句话——而那句话讲了两版都没拦住（真跑 2/6 复发）。
     """
     lines: list[str] = []
-    unit = f" {anchor.unit}" if anchor.unit else ""
+    unit = _join_unit("", anchor.unit) if anchor.unit else ""
     kind, side = bound_expectation(anchor)
 
     if not anchor.has_items:
