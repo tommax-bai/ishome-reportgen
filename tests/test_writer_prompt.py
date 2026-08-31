@@ -301,7 +301,7 @@ def test_prompt_without_judgment_samples_does_not_break() -> None:
     """缺样例（多数域的现状）不崩、不留空标题——示范块整块缺席。"""
     system = build_messages(request_for("lighting"))[0]["content"]
     assert "这么写不行" not in system
-    assert "禁词" in system
+    assert "这些词一个都不能出现" in system
 
 
 def test_empty_string_pair_is_skipped() -> None:
@@ -443,13 +443,44 @@ def test_prompt_does_not_itself_write_the_words_it_bans() -> None:
     两处**必然**含词面，从检查范围里剔除，且只剔这两处：①禁词表本身（要告诉它禁哪些）；
     ②题名撞词的逐行点名（那个词已经在题名里，点名是贴标签不是塞新词面，故不违铁律一）。
     """
-    banned = ["照度", "显指", "可能", "也许", "依据", "推导", "保证", "宜", "责任", "本方案"]
-    request = request_for()
-    request.banned_terms = banned
-    system = build_messages(request)[0]["content"]
-    system = system.replace("、".join(banned), "")  # ①禁词表本身
-    leaked = [t for t in banned if t in system]
-    assert not leaked, f"prompt 自己写了禁词：{leaked}"
+    banned = [
+        "照度",
+        "显指",
+        "可能",
+        "也许",
+        "依据",
+        "推导",
+        "保证",
+        "宜",
+        "责任",
+        "本方案",
+        "承诺",
+        "无风险",
+        "免责",
+        "尽量",
+        "综合考量",
+        "验收标准",
+        "作业范围",
+        "视情况",
+    ]
+    groups = {
+        "weak": ["可能", "也许", "宜", "尽量", "视情况"],
+        "methodology": ["依据", "推导", "本方案", "综合考量", "验收标准", "作业范围"],
+        "overreach": ["保证", "承诺", "无风险"],
+        "responsibility": ["责任", "免责"],
+        "jargon": ["照度", "显指"],
+    }
+    # 两条路都要跑：分组下发（现形态）与平表回退（旧包）。第一版守卫只跑了平表那条，
+    # 于是分组路由话里的「承诺」「责任」漏了过去——**同一个毛病被新代码重犯了一次**。
+    for supplied in (groups, {}):
+        request = request_for()
+        request.banned_terms = banned
+        request.banned_term_groups = supplied
+        system = build_messages(request)[0]["content"]
+        for group_terms in supplied.values() if supplied else [banned]:
+            system = system.replace("、".join(group_terms), "")  # ①禁词表本身（分组即分行）
+        leaked = [t for t in banned if t in system]
+        assert not leaked, f"prompt 自己写了禁词（分组={bool(supplied)}）：{leaked}"
 
 
 def test_discipline_quotes_the_labels_the_anchor_lines_actually_print() -> None:

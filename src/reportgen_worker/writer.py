@@ -44,6 +44,7 @@ from reportgen_worker.gate import (
     PLACEHOLDER_RE,
     REF_SEPARATOR,
     THESIS_SUPPORT,
+    banned_terms_block,
     bound_expectation,
 )
 from reportgen_worker.models import (
@@ -85,6 +86,10 @@ class WriterRequest(BaseModel):
     稿子，它实际是从头再写一章、只是被告知上次踩了哪些坑。真跑症状对得上：违规在卡片之间跳
     （这一轮 card[3]、下一轮 card[4]），同一条错两轮都在。带回原稿后，打回从"重写一章并避开这些
     坑"变成"这张卡这一句改掉"。"""
+    banned_term_groups: dict[str, list[str]] = {}
+    """禁词按"为什么禁"分组（组名 → 词面），平表 ``banned_terms`` 是它的并集。
+
+    缺省空＝旧包，禁词退回一行平表下发、打回退回通用那句——行为与从前一致。"""
     earlier_feedback: list[list[Violation]] = []
     """更早几稿的打回原因，**由旧到新，不含最近这一稿**（用户裁决 2026-08-30）。
 
@@ -358,7 +363,7 @@ def _history_part(earlier: list[list[Violation]]) -> str:
 
 def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     """prompt 拼装（纯函数，可单测）：素材全部来自 release 数据载荷。"""
-    banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
+    banned = banned_terms_block(request.banned_terms, request.banned_term_groups)
     backed = "、".join(request.backed_predicates) if request.backed_predicates else "（无）"
     # 对照句对是"这么写不行 → 这么写才对"的示范，模型最吃这个形态；放在纪律之后、输出格式之前，
     # 让它先读完规则再看规则长什么样。下发的每一句（含 ✗）都自己过得了机检（见 judgment_pairs）。
@@ -398,18 +403,20 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "**每条落点下面写着这个空要填的值是什么特征**（是一个确定的数、还是只给了上限/下限、"
         "还是一个范围），照那句话写：只给一侧的必须在记号前面写清是上限还是下限（可用的词逐字"
         "列在那里），是确定的数就别加限定词；**单位一律由记号自己带出来，正文里不要再写一遍**；\n"
-        "3. 落点分两档，档写在每条落点题名后面的「｜」右边："
-        "「可作支点」的可以拿来下判断；「没有外部背书」的照常用，**主旨句里也可以出现**，"
+        "3. 每条落点题名后面「｜」右边写着它的**语域档**（这一条管口吻，不管能不能下判断——"
+        "下判断看第 5 条那张题目表）：标「没有外部背书」的照常用、**主旨句里也可以出现**，"
         "但语域限「我们建议…」「按行业通行做法…」，"
-        "不许写成「国标要求」「必须」这类标准口吻；\n"
+        "不许写成「国标要求」「必须」这类标准口吻；标「可作支点」的没有这条口吻限制；\n"
         "4. 不许把 lkp- 开头的内部编号写进正文或主旨句——业主不认识这些编号。"
         "要用它的数字就写 {lkp-id} 占位；要说这条没有背书，用人话说（如"
         "「这一项目前只能给参考范围」），不要点名编号。"
         "**记号里点号后面那一段（项名）同样是内部标签**：它只出现在记号里，"
         "那一项是哪个场合、哪个档位、哪个分项，正文里用人话说；\n"
-        f"5. 判断句只允许落在这几个题目上：{backed}。"
-        "写了判断句就在 assertions 里声明用的是哪一个；其余题目这轮没有背书，不许下结论；\n"
-        f"6. 禁词（一个都不能出现）：{banned}。"
+        f"5. 判断句只允许落在这几个**题目**上：{backed}。"
+        "写了判断句就在 assertions 里声明用的是哪一个——**逐字写上面那几个题目名**，"
+        "题目名与落点题名是两张表，别把落点题名填进去（填了会被打回）；"
+        "其余题目这轮没有背书，不许下结论；\n"
+        f"6. 这些词一个都不能出现——{banned}\n"
         "**落点的题名里就带着其中一些**——带了的那几条已在下面逐行标出来。"
         "题名是内部标签，不是要你照抄的说法：引用它的数字写 {lkp-id} 占位，"
         "那件事本身用业主读得懂的话说；\n"

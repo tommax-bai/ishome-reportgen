@@ -31,6 +31,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from reportgen_worker.models import (
     ITEM_NAME_RE,
@@ -286,6 +287,77 @@ def collect_banned_terms(domain: str, package: ReportDataPackage) -> list[str]:
             if isinstance(value, list):
                 terms.update(t for t in value if isinstance(t, str))
     return sorted(terms)
+
+
+# 禁词按"为什么禁"分组后各自的路（用户裁决 2026-08-30：加分类）。
+#
+# 立案：此前 25 个词共用一句"换人话说"。那句话对「照度」成立（换个业主读得懂的说法），
+# 对「可能」是**错的指令**——软话不是换个近义词能救的：换「或许」还是禁词，换「大概」不在表里
+# 但立刻被弱词判据打，真跑 v5 就是这么烧掉两轮重写的（同一个「宜」两条判据一起中）。
+#
+# 组名来自种子 yaml 的键，**不认得的组退回通用那句**——加组不破消费，也不必改这里。
+# 路只说"往哪走"，**不给替代词**：替代说法固定在这里＝每份报告说同一个词，那是人预设模板
+# （用户裁决 2026-08-30：判据只判不写）。
+BANNED_GROUP_ROUTE = {
+    "weak": "这是软话，写了等于没下结论 → 这句话要么说定、要么整句删掉；换个近义的软词一样过不了",
+    "methodology": (
+        "这是在讲报告怎么来的、活怎么干、怎么验收 → 报告只讲你家里该是什么样，这些一概不写"
+    ),
+    # 路由话自己也不许写禁词——第一版这两句写了「承诺」「责任」，正是本轮在修的那个毛病
+    # 由新代码重犯了一次（守卫测试当时只跑平表回退那条路，没盖住分组这条）。
+    "overreach": "这是把结果说死 → 不许打包票，只讲做法",
+    "responsibility": "这是在说谁担后果 → 这整句不能对业主说，删掉",
+    "jargon": "这是业主读不懂的工程词 → 那件事本身用业主读得懂的话说",
+}
+_BANNED_ROUTE_FALLBACK = "换人话说"
+
+
+def collect_banned_groups(domain: str, package: ReportDataPackage) -> dict[str, list[str]]:
+    """本域禁词按组（组名 → 词面），与 :func:`collect_banned_terms` 同一批词、只是保留了分组。
+
+    两个来源合并：包里的跨域分组（生产侧新加，旧包缺省空）+ persona 的 ``banned_terms``——
+    后者的**键本身就是组名**（``jargon``/``domain_extra``…），``inherit`` 是文件路径故跳过非列表值。
+    未分组的词进 ``domain_extra``（或它自己那个组名），拿到的是通用打回话。
+    """
+    groups: dict[str, set[str]] = {}
+    for group, terms in package.banned_term_groups_by_domain.get(domain, {}).items():
+        groups.setdefault(group, set()).update(t for t in terms if isinstance(t, str))
+    for persona in package.personas_by_domain.get(domain, []):
+        for group, value in persona.banned_terms.items():
+            if isinstance(value, list):
+                groups.setdefault(group, set()).update(t for t in value if isinstance(t, str))
+    return {group: sorted(terms) for group, terms in sorted(groups.items()) if terms}
+
+
+def banned_route_of(term: str, groups: dict[str, list[str]]) -> str:
+    """这个词该往哪走。查不到组、或组名不认得，都退回通用那句——**永远给得出一句话**。"""
+    for group, terms in groups.items():
+        if term in terms:
+            return BANNED_GROUP_ROUTE.get(group, _BANNED_ROUTE_FALLBACK)
+    return _BANNED_ROUTE_FALLBACK
+
+
+def banned_terms_block(terms: Sequence[str], groups: dict[str, list[str]]) -> str:
+    """禁词下发块：**按"为什么禁"分行，每行给这一类的改法**（用户裁决 2026-08-30）。
+
+    与打回话共用同一份 :data:`BANNED_GROUP_ROUTE`——两处分家正是本轮在修的那类毛病
+    （指令与它描述的输入对不上）。没有分组信息（旧包）时退回一行平表，行为与从前一致。
+
+    分行还有第二个用处：平表只禁**表上这些字符串**，带理由的分行能让它避开**表上没有的近邻**
+    （「大概」不在表里但同样是软话；当初那个叠字缺陷的「不能多于」也是这样漏的）。
+    """
+    listed = {t for group in groups.values() for t in group}
+    rest = [t for t in terms if t not in listed]
+    if not groups:
+        return "、".join(terms) if terms else "（无）"
+    lines = [
+        f"  · {'、'.join(group_terms)}——{BANNED_GROUP_ROUTE.get(group, _BANNED_ROUTE_FALLBACK)}"
+        for group, group_terms in groups.items()
+        if group_terms
+    ]
+    if rest:
+        lines.append(f"  · {'、'.join(rest)}——{_BANNED_ROUTE_FALLBACK}")
+    return "按「为什么不能写」分类，各有各的改法：\n" + "\n".join(lines)
 
 
 def judgment_good_texts(domain: str, package: ReportDataPackage) -> list[str]:
@@ -668,7 +740,13 @@ def run_unit_gate(
     # "主旨句支点必须过门"，不是"断言必须有背书"
     supported = thesis_support_ids(domain, package)
     banned = collect_banned_terms(domain, package)
+    # 分组只影响**打回话怎么说**，扫描仍走平表（两者恒一致，平表是分组的并集）。
+    banned_groups = collect_banned_groups(domain, package)
     budget = assertion_budget(domain, package)
+    # 打回话给的名单必须与 prompt 纪律第 5 条给的**同一份**（这轮有背书的那几个）：
+    # 原先这里列的是预算全集，模型照它挑一个没背书的，下一轮撞 gate-assertion-unbacked——
+    # 一句对不上的打回等于没打回（同"指令与它描述的输入对不上"那一族）。
+    usable = backed_predicates(domain, package)
     good_samples = judgment_good_texts(domain, package)
     pattern_checks = [c for c in package.checks_by_domain.get(domain, []) if c.pattern]
 
@@ -764,7 +842,7 @@ def run_unit_gate(
                         check="gate-assertion-not-budgeted",
                         detail=(
                             f"{label} 谓词「{predicate}」不在本域断言预算内 → "
-                            f"只能用这几个：{'、'.join(sorted(budget))}"
+                            f"这轮只能用这几个：{'、'.join(usable) or '（这轮一个都没有）'}"
                         ),
                     )
                 )
@@ -836,7 +914,11 @@ def run_unit_gate(
         for term in banned:
             if term in text:
                 violations.append(
-                    Violation(check="gate-banned-term", detail=f"{label} 禁词「{term}」 → 换人话说")
+                    Violation(
+                        check="gate-banned-term",
+                        # 冒号不用箭头：路自己带着「这是什么 → 怎么改」，再加一个箭头就是两级箭头
+                        detail=f"{label} 禁词「{term}」：{banned_route_of(term, banned_groups)}",
+                    )
                 )
 
         for sample in good_samples:

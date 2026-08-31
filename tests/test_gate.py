@@ -11,6 +11,8 @@ from reportgen_worker.gate import (
     annotation_required_anchors,
     assertion_budget,
     backed_predicates,
+    banned_route_of,
+    banned_terms_block,
     collect_banned_terms,
     required_provenance_notes,
     run_package_gate,
@@ -908,3 +910,32 @@ def test_package_gate_accepts_every_well_formed_value_kind(
 ) -> None:
     """七类里的五类分项形态照收（另两类＝夹具里的 range 与 single）——门禁只拦形态不符的。"""
     assert run_package_gate("ergonomics", package_with_anchor(kind, value)) == []
+
+
+def test_banned_pushback_routes_by_group_not_one_line_for_all() -> None:
+    """打回话按"为什么禁"分路（用户裁决 2026-08-30：加分类）。
+
+    立案：此前 25 个词共用一句"换人话说"。那句话对「照度」成立，对「可能」是**错的指令**——
+    软话不是换个近义词能救的：换「或许」还是禁词，换「大概」不在表里但立刻被弱词判据打。
+    真跑 v5 就是这么烧掉两轮重写的（同一个「宜」，禁词判据与弱词判据一起中同一句）。
+    """
+    groups = {"weak": ["宜"], "jargon": ["照度"], "domain_extra": ["总价"]}
+    assert "要么说定" in banned_route_of("宜", groups)
+    assert "业主读得懂" in banned_route_of("照度", groups)
+    # 未分组的组名（本域自定、还没分类）退回通用那句——加组不破消费，不认得也永远给得出一句话
+    assert banned_route_of("总价", groups) == "换人话说"
+    assert banned_route_of("表外的词", groups) == "换人话说"
+
+
+def test_banned_block_falls_back_to_flat_line_without_groups() -> None:
+    """没有分组信息（旧包）时退回一行平表——消费侧先建、生产侧后发，缺省必须仍然可用。"""
+    assert banned_terms_block(["可能", "照度"], {}) == "可能、照度"
+    block = banned_terms_block(["可能", "照度"], {"weak": ["可能"], "jargon": ["照度"]})
+    assert "分类" in block
+    assert "可能——" in block and "照度——" in block
+
+
+def test_banned_block_keeps_ungrouped_terms() -> None:
+    """平表里有、分组里没有的词不许丢——平表是分组的并集，丢一个就是漏禁。"""
+    block = banned_terms_block(["可能", "延米"], {"weak": ["可能"]})
+    assert "延米" in block

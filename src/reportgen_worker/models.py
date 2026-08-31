@@ -293,6 +293,13 @@ class ReportDataPackage(_PackageModel):
     规则"，成文线**不重判触发**（同"成文线不重判求值线"）。
     """
     banned_terms_by_domain: dict[str, list[str]]
+    banned_term_groups_by_domain: dict[str, dict[str, list[str]]] = {}
+    """同一批禁词按**为什么禁**分组（域 → 组名 → 词面），平表是它的并集。
+
+    **消费侧先建、生产侧后发**（同 ``triggered_rules_by_domain``）：缺省空 = 旧包，
+    退回对全部禁词说同一句打回话——那正是本字段要修的形态，故缺省必须仍然可用。
+    平表**不删**：扫描与守卫要的是平表，分组只供打回话与 prompt 分句用。
+    """
     locked_texts_by_domain: dict[str, list[str]] = {}
     """本产物必挂的锁定文案 ID 集（图 v0.2 §2 报告数据包的"锁定清单"，枚举见 contracts
     `registries/locked_texts.md`）。

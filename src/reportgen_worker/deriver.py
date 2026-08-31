@@ -34,7 +34,7 @@ from typing import Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from reportgen_worker.gate import CHINESE_NUMBER_RE, DIGIT_RE
+from reportgen_worker.gate import CHINESE_NUMBER_RE, DIGIT_RE, banned_terms_block
 from reportgen_worker.models import (
     AnchorBrief,
     EvaluationProfile,
@@ -80,6 +80,8 @@ class DeriveRequest(BaseModel):
     兜住（同禁词那条路径；prompt 里叮嘱无效已实测三次）。"""
     backed_predicates: list[str] = []
     unbacked_predicates: list[str] = []
+    banned_term_groups: dict[str, list[str]] = {}
+    """禁词按"为什么禁"分组（同写作步）：缺省空＝旧包，退回一行平表下发。"""
     feedback: list[str] = []
     """上一次推导被打回的理由（重试时下发）：同写作那条循环的形态——不告诉它哪儿错了，
     它只会把同一句再写一遍（真跑实测：同一个禁词连吃三稿）。"""
@@ -143,7 +145,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
     """推导 prompt（纯函数，可单测）：素材只有身份、落点题名、缺口、匿名画像、断言预算题目。"""
     backed = "、".join(request.backed_predicates) if request.backed_predicates else "（无）"
     unbacked = "、".join(request.unbacked_predicates) if request.unbacked_predicates else "（无）"
-    banned = "、".join(request.banned_terms) if request.banned_terms else "（无）"
+    banned = banned_terms_block(request.banned_terms, request.banned_term_groups)
     system = (
         f"{request.identity}\n"
         "这一步你**不写给业主看**，你在决定这一章讲哪几件事。纪律：\n"
@@ -181,7 +183,7 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "把有值的落点说成「给不出数」是被禁止的隐藏——值多软都要照讲，软的自会带标注；\n"
         "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
         "不要为了铺满而拆出没有取舍的主张；\n"
-        f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）：{banned}。"
+        f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）——{banned}\n"
         "**落点的题名里就带着其中一些**——带了的那几条已在下面逐行标出来。"
         "题名是内部标签不是说法，你在主张里要换成业主读得懂的话；\n"
         '输出：JSON 数组，每个元素 {"claim": 主张, "anchors": [用到的落点 id]}，'
