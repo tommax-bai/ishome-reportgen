@@ -28,13 +28,18 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from reportgen_worker.gate import CHINESE_NUMBER_RE, DIGIT_RE, banned_terms_block
+from reportgen_worker.gate import (
+    CHINESE_NUMBER_RE,
+    DIGIT_RE,
+    banned_route_of,
+    banned_terms_block,
+)
 from reportgen_worker.models import (
     AnchorBrief,
     EvaluationProfile,
@@ -261,6 +266,7 @@ def parse_claims(
     banned_terms: Sequence[str] = (),
     triggered_rules: Sequence[TriggeredRule] = (),
     item_names: Sequence[str] = (),
+    banned_groups: Mapping[str, list[str]] | None = None,
 ) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
@@ -319,11 +325,17 @@ def parse_claims(
         )
     hits = sorted({t for t in banned_terms for c in cleaned if t in c.claim})
     if hits:
+        # 打回按组给路，与写作步同形（gate.py 同名判据一直是这么打的）。此前这一步是**定死的一句**、
+        # 不查 banned_route_of——2026-08-31 六章整册真跑，budget 推导三次全失败，三次拿到的都是同一句
+        # 没有理由的「换人话重写」。路由话由 BANNED_GROUP_ROUTE 一处供两步，查不到组仍退兜底那句。
+        routes = "；".join(
+            f"「{t}」{banned_route_of(t, dict(banned_groups or {}))}" for t in hits
+        )
         # 主张是内部语域，禁词表是客户语域的——**这里仍然用同一份表**，因为主张逐字进写作 prompt：
         # 真跑两次证明写作步兜不住（拿到带禁词的主张，连吃三稿都在同一个词上被打回，
         # 而下一稿拿到的主张还是那句）。判在这一步，写作步才有一份干净的骨架。
         raise DeriverOutputError(
-            f"主张里出现禁词 {hits}——这几个词下一步照抄就会被机检打回，换人话重写",
+            f"主张里出现禁词，下一步照抄就会被机检打回，按各自的改法重写——{routes}",
             claims=cleaned,
         )
     copied = sorted(
@@ -393,4 +405,5 @@ class LlmNarrativeDeriver:
             request.banned_terms,
             request.triggered_rules,
             [item for a in request.anchors for item in a.items],
+            request.banned_term_groups,
         )

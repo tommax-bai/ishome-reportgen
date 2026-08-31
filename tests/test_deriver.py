@@ -391,3 +391,28 @@ def test_parse_claims_error_carries_the_rejected_draft() -> None:
     with pytest.raises(DeriverOutputError) as excinfo:
         parse_claims('[{"claim": "床面高和床侧净距得一起定。", "anchors": []}]', set())
     assert [c.claim for c in excinfo.value.claims] == ["床面高和床侧净距得一起定。"]
+
+
+def test_banned_pushback_in_derivation_routes_by_group_like_the_writing_step() -> None:
+    """推导步的禁词打回也按"为什么禁"分路——两步同形（射程＝所有裁判场）。
+
+    真跑立案（2026-08-31，第一次六章整册）：budget 推导三次全失败、全栽在「报价」，三次拿到的
+    都是同一句**定死的**「换人话重写」——写作步同名判据一直查 ``banned_route_of``，这一步没查。
+    没有"为什么不行"，模型只能换个说法再撞一次；那一章因此把整册拖成 failed。
+    """
+    groups = {"deal": ["报价"], "weak": ["宜"]}
+    with pytest.raises(DeriverOutputError) as excinfo:
+        parse_claims(
+            '[{"claim": "这一章不替谁报价。", "anchors": []}]',
+            set(),
+            ["报价"],
+            banned_groups=groups,
+        )
+    detail = str(excinfo.value)
+    assert "成交那一步不归你说" in detail, "打回没带上这个词为什么不行"
+    assert "换人话重写" not in detail, "退回了定死的那一句"
+    # 查不到组仍给得出一句话——加组不破消费，同写作步的兜底
+    with pytest.raises(DeriverOutputError, match="换人话说"):
+        parse_claims(
+            '[{"claim": "这一章不替谁报价。", "anchors": []}]', set(), ["报价"], banned_groups={}
+        )
