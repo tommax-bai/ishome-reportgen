@@ -46,7 +46,12 @@ def test_footer_anchor_name_with_jargon_fails_the_book() -> None:
             ProvenanceNote(lkp_id="lkp-passage-main", source="行业通行", calibration="draft")
         ],
     )
-    hits = [v for v in book_jargon_violations([page], PACKAGE) if "页脚" in v.detail]
+    # 考卷题名已随业务侧改成「主通道宽度」（2026-09-08），这里把旧题名放回去复现立案样本。
+    package = PACKAGE.model_copy(deep=True)
+    for anchor in package.anchors:
+        if anchor.lkp_id == "lkp-passage-main":
+            anchor.name = "主通道净宽"
+    hits = [v for v in book_jargon_violations([page], package) if "页脚" in v.detail]
     assert len(hits) == 1
     assert "主通道净宽" in hits[0].detail and "「净宽」" in hits[0].detail
     assert "求值线改题名" in hits[0].detail

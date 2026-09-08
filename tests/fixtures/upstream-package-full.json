@@ -38,7 +38,7 @@
   "anchors": [
     {
       "lkpId": "lkp-accent-ratio",
-      "name": "重点照明照度倍数",
+      "name": "重点照明亮度倍数",
       "numberClass": "analysis",
       "unit": "倍",
       "valueKind": "range",
@@ -611,7 +611,7 @@
     },
     {
       "lkpId": "lkp-illuminance-bath",
-      "name": "卫生间照度标准值",
+      "name": "卫生间亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "scenario",
@@ -635,7 +635,7 @@
     },
     {
       "lkpId": "lkp-illuminance-bedroom",
-      "name": "卧室照度标准值",
+      "name": "卧室亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "scenario",
@@ -659,7 +659,7 @@
     },
     {
       "lkpId": "lkp-illuminance-corridor",
-      "name": "走廊与楼梯间照度标准值",
+      "name": "走廊亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "single",
@@ -680,7 +680,7 @@
     },
     {
       "lkpId": "lkp-illuminance-dining",
-      "name": "餐厅照度标准值",
+      "name": "餐厅亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "single",
@@ -701,7 +701,7 @@
     },
     {
       "lkpId": "lkp-illuminance-kitchen",
-      "name": "厨房照度标准值",
+      "name": "厨房亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "scenario",
@@ -725,7 +725,7 @@
     },
     {
       "lkpId": "lkp-illuminance-living",
-      "name": "起居室照度标准值",
+      "name": "起居室亮度标准值",
       "numberClass": "analysis",
       "unit": "lx",
       "valueKind": "scenario",
@@ -919,7 +919,7 @@
     },
     {
       "lkpId": "lkp-passage-main",
-      "name": "主通道净宽",
+      "name": "主通道宽度",
       "numberClass": "analysis",
       "unit": "mm",
       "valueKind": "range",
@@ -942,7 +942,7 @@
     },
     {
       "lkpId": "lkp-passage-secondary",
-      "name": "次通道净宽",
+      "name": "次通道宽度",
       "numberClass": "analysis",
       "unit": "mm",
       "valueKind": "range",
