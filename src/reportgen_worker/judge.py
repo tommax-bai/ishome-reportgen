@@ -47,7 +47,7 @@ from reportgen_worker.models import (
 JUDGE_LOGICAL_MODEL = "report-unit-judge.default"
 _OBSERVATIONS_ADAPTER: TypeAdapter[list[JudgeObservation]] = TypeAdapter(list[JudgeObservation])
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
-_QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
+QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
 
 # 外部标准号（国标/行标/国际标准）。判官的输入面里**没有任何标准原文**——prompt 只给它判据与样例、
 # 匿名画像、落点名、待检文稿（:func:`build_judge_messages`，落点的 source 都不给）。所以 ``why``
@@ -178,7 +178,7 @@ def parse_observations(raw: str, request: JudgeRequest) -> list[JudgeObservation
     inputs = _input_face(request)
     observations = []
     for item in parsed:
-        quote = item.quote.strip(_QUOTE_TRIM)
+        quote = item.quote.strip(QUOTE_TRIM)
         fabricated = _fabricated_citations(item.why, inputs)
         if item.check not in known:
             logger.warning("判官报了未下发的判据 %s，丢弃", item.check)

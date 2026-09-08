@@ -6,7 +6,8 @@
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
   占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名与裸项名、
   语域示范不得被逐字抄进正文、**正文不得逐句照搬主旨句**（临时护栏，治本是叙事推导那一步）、
-  **记号旁边不替渲染层说话**（前不写边界词、后不补单位——记号渲出来是完整的说法）。
+  **记号旁边不替渲染层说话**（前不写边界词、后不补单位——记号渲出来是完整的说法）、
+  **中文正文不漏英文词**（单位与 LED/TV 一类缩写除外，``gate-latin-word-leak``）。
   **报告线四条（用户裁决 2026-09-07 整册真跑立案）**：主旨句只引一个记号（规则 5.16）、
   两个区间型记号不许用"到/至/—"接成一个区间、同章两张卡不许逐字重复同一小句、
   册级各域行话取并集扫整册含页脚（规则 4.13 增补，``book-jargon-across-domains``）。
@@ -57,6 +58,33 @@ PLACEHOLDER_RE = re.compile(r"\{(lkp-[a-z0-9-]+)(?:\.([a-z0-9-]+))?\}")
 REF_SEPARATOR = "."
 DIGIT_RE = re.compile(r"[0-9０-９]")
 BARE_LKP_RE = re.compile(r"lkp-", re.IGNORECASE)
+
+LATIN_TOKEN_RE = re.compile(r"[A-Za-z]+(?:-[A-Za-z]+)*")
+"""拉丁字母连成的词（连字符算词内，``low-E`` 是一个词不是两个）；单个字母（U 型/L 型/K）不算词。"""
+
+LATIN_WORD_WHITELIST: frozenset[str] = frozenset(
+    {
+        # —— 单位：六域落点 unit 字段里真实出现的拉丁串（tests/fixtures 全册 + support 卷子）——
+        "mm",  # 毫米：人体工学/收纳/材质落点的尺寸单位
+        "lx",  # 勒克斯：灯光域照度落点单位（"300 lx"）
+        "Ra",  # 显色指数：灯光域 CRI 落点单位（"Ra 80"）
+        # "m" / "K" 是单字母（米、色温开尔文 "4000 K"），单字母本来不判，列出来只为说明它们合法
+        # —— 专有缩写：业主语域里没有对应中文说法、写成中文反而不认识的 ——
+        "LED",  # 灯具形态，灯光域常写"LED 灯带"
+        "TV",  # "TV 柜/TV 墙"是家装口语固定写法
+        "low-E",  # 中空玻璃镀膜名，材质域正当写法（gate-item-name-leak 词边界注释已认它）
+    }
+)
+"""拉丁字母词白名单（``gate-latin-word-leak``）。
+
+2026-09-08 立案：真跑册灯光章写出「起居 and 卧室」。
+
+判据判的是**词**：连续两个及以上拉丁字母连成的串。单位与专有缩写以外的拉丁词是模型把英文连接词
+/英文原文漏进了中文正文——业主看到的是中文报告，一个 and 就是一处不该有的外文。名单只收
+**在六域 persona/parameters 与考卷正文里合法出现过**的串，再加业主语域里没有中文替代的缩写；
+每一项旁边写它为什么合法，不写理由的不收。大小写按原样比对：``mm``/``lx``/``Ra`` 的大小写就是
+单位本身的写法，``MM`` 不是单位。
+"""
 
 # 中文数字：真跑（2026-08-28）抓到的绕过——模型被禁裸数字后改写"亮三到五倍""不能低于九十"，
 # 阿拉伯数字门禁一字未命中，但读者读到的仍是没有落点背书的数字。
@@ -669,6 +697,16 @@ def _clauses(text: str) -> list[str]:
     return [c for c in (_WHITESPACE_RE.sub("", p) for p in _CLAUSE_SPLIT_RE.split(text)) if c]
 
 
+def latin_word_leaks(text: str) -> list[str]:
+    """``text``（已剥记号）里不在白名单的拉丁字母词，按首次出现顺序去重（``gate-latin-word-leak``）。"""
+    seen: list[str] = []
+    for token in LATIN_TOKEN_RE.findall(text):
+        if len(token.replace("-", "")) < 2 or token in LATIN_WORD_WHITELIST or token in seen:
+            continue
+        seen.append(token)
+    return seen
+
+
 def thesis_restated_in_body(thesis: str, body: str) -> bool:
     """主旨句是不是被逐句原样搬进了正文（``gate-thesis-body-duplicate`` 的判定，v2.9）。
 
@@ -1101,6 +1139,19 @@ def run_unit_gate(
                     check="gate-chinese-numeral",
                     detail=f"{label} 「{chinese_number.group(0)}」是中文数字写的数"
                     f"{_NO_ANCHOR_ROUTE}",
+                )
+            )
+        # 拉丁字母词泄漏（2026-09-08 立案：灯光章「起居 and 卧室」）：中文正文里出现英文词，
+        # 除单位与专有缩写外一律打回。跑剥掉记号后的文本——记号体是 kebab-case ASCII，不剥会全中。
+        latin_words = latin_word_leaks(stripped)
+        if latin_words:
+            violations.append(
+                Violation(
+                    check="gate-latin-word-leak",
+                    detail=(
+                        f"{label} 正文出现英文词「{'、'.join(latin_words)}」 → "
+                        "业主看的是中文，换成中文说法（单位与 LED/TV 这类缩写不算）"
+                    ),
                 )
             )
         # 客户语域禁内部标识名：{lkp-*} 是渲染契约，裸 lkp- 是把内部命名空间漏给业主看

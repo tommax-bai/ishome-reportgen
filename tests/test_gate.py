@@ -178,6 +178,84 @@ def test_thesis_with_one_ref_passes_ref_count() -> None:
     assert "gate-thesis-ref-count" not in checks_of(run_unit_gate([card], "ergonomics", UPSTREAM))
 
 
+def test_english_word_leaking_into_the_body_is_rejected() -> None:
+    """2026-09-08 真跑册灯光章原文回放：「起居 and 卧室」——中文正文里漏进了英文连接词。"""
+    card = Card(
+        thesis="起居 and 卧室的亮度按你在那儿做什么来分。",
+        body="沙发那片区域锚在 {lkp-illuminance-living}，看书的时候再补一盏。",
+        number_refs=["lkp-illuminance-living"],
+    )
+    hits = [
+        v for v in run_unit_gate([card], "lighting", UPSTREAM) if v.check == "gate-latin-word-leak"
+    ]
+    assert len(hits) == 1
+    assert "「and」" in hits[0].detail
+    assert "换成中文说法" in hits[0].detail
+
+
+def test_latin_word_leak_lists_each_offending_word_once() -> None:
+    card = Card(
+        thesis="the 起居室 and 卧室 and 书房。",
+        body="沙发那片区域锚在 {lkp-illuminance-living}。",
+        number_refs=["lkp-illuminance-living"],
+    )
+    hits = [
+        v for v in run_unit_gate([card], "lighting", UPSTREAM) if v.check == "gate-latin-word-leak"
+    ]
+    assert len(hits) == 1
+    assert "「the、and」" in hits[0].detail
+
+
+@pytest.mark.parametrize(
+    ("thesis", "body", "refs", "domain"),
+    [
+        # U 型：单字母不是词
+        (
+            "U 型厨房两排之间的距离要让两个人错得开身。",
+            "两排间距按 {lkp-kitchen-u-gap} 做。",
+            ["lkp-kitchen-u-gap"],
+            "ergonomics",
+        ),
+        # LED 是专有缩写，K 是单字母单位
+        (
+            "起居室主灯用 LED 灯带压着 4000 K 的色温走。",
+            "沙发那片区域锚在 {lkp-illuminance-living}。",
+            ["lkp-illuminance-living"],
+            "lighting",
+        ),
+        # lx 是照度单位
+        (
+            "书桌面上要有 300 lx 这个量级的亮度。",
+            "书写那片锚在 {lkp-illuminance-living}。",
+            ["lkp-illuminance-living"],
+            "lighting",
+        ),
+        # low-E 是玻璃镀膜名，连字符算词内，不拆成 low + E
+        (
+            "朝西的窗换 low-E 玻璃能挡掉下午的热。",
+            "沙发那片区域锚在 {lkp-illuminance-living}。",
+            ["lkp-illuminance-living"],
+            "lighting",
+        ),
+    ],
+)
+def test_units_and_proper_abbreviations_are_not_latin_word_leaks(
+    thesis: str, body: str, refs: list[str], domain: str
+) -> None:
+    card = Card(thesis=thesis, body=body, number_refs=refs)
+    assert "gate-latin-word-leak" not in checks_of(run_unit_gate([card], domain, UPSTREAM))
+
+
+def test_latin_word_leak_ignores_placeholder_bodies() -> None:
+    """记号体是 kebab-case ASCII（lkp-illuminance-living）：不剥记号这条判据会把每张卡都拦下。"""
+    card = Card(
+        thesis="起居室的亮度按你在那儿做什么来分。",
+        body="沙发那片区域锚在 {lkp-illuminance-living}。",
+        number_refs=["lkp-illuminance-living"],
+    )
+    assert "gate-latin-word-leak" not in checks_of(run_unit_gate([card], "lighting", UPSTREAM))
+
+
 def test_two_ranges_joined_by_dao_are_rejected() -> None:
     """原文回放（2026-09-07 材质章）：「价差在 {a} 倍到 {b} 倍之间」——两档各自的区间被拼成一个。
 

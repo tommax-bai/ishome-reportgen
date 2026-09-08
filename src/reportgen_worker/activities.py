@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,6 +44,7 @@ from reportgen_worker.gate import (
     unbacked_predicates,
 )
 from reportgen_worker.judge import (
+    QUOTE_TRIM,
     Judge,
     JudgeRequest,
     LlmJudge,
@@ -86,15 +87,33 @@ JUDGE_LEDGER_ENV = "REPORTGEN_JUDGE_LEDGER"
 
 一行 = 一次送审。activity 重试会追加新行，那**不是重复记账**：重试是新的一次 LLM 送审，
 它本来就该被记成新的一份。
+
+**每条还带判官报的原话**（``observations``，2026-09-08）：只有 ``checks[].hits`` 计数时，
+台账能回答"中了几次"，回答不了"中在哪句、为什么"——门禁二要判一条判据工不工作，看的是它报出
+来的句子对不对，光有次数判不了。``quote`` 是判官从文稿逐字摘的原句（``parse_observations``
+核实过在文稿里），生成侧本来不知道用户是谁，原句里没有业主身份，可以落盘。
 """
 
+THESIS_EXCERPT_CHARS = 20
 
-def append_judge_ledger(domain: str, run: JudgeRun | None, releases: list[ReleaseRef]) -> None:
+
+def append_judge_ledger(
+    domain: str,
+    run: JudgeRun | None,
+    releases: list[ReleaseRef],
+    observations: Sequence[JudgeObservation] = (),
+    cards: Sequence[Card] = (),
+) -> None:
     """把一次送审的台账追加进观察记录（未配置路径即跳过）。
 
     落 activity 层是分层要求：IO 全部收口在这里（判官层保持纯函数 + 一次网关调用）。
     **写失败只记一条日志**：台账写不进去是观察数据的损失，不是这份内容的事故——同"判官不阻塞"
     的同一条理由，把可用性问题变成质量问题是反的。
+
+    ``observations`` 每条落成 ``{check, quote, why, card_index, card_thesis}``：判官只报原句
+    不报卡号，这里按"原句在哪张卡的主旨句或正文里"反查卡号，并附该卡主旨句前
+    :data:`THESIS_EXCERPT_CHARS` 字——看台账的人不用翻回文稿就知道说的是哪张卡。
+    原句跨卡（落在两张卡拼接处）时查不到，``card_index`` 记 ``None``、``card_thesis`` 记空串。
     """
     path = os.environ.get(JUDGE_LEDGER_ENV)
     if not path or run is None:
@@ -104,12 +123,30 @@ def append_judge_ledger(domain: str, run: JudgeRun | None, releases: list[Releas
         "domain": domain,
         "releases": [r.release_tag for r in releases],
         **run.model_dump(),
+        "observations": [ledger_observation(o, cards) for o in observations],
     }
     try:
         with open(path, "a", encoding="utf-8") as ledger:
             ledger.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError:
         logger.warning("判官台账写入失败（不影响 verdict）：%s", path, exc_info=True)
+
+
+def ledger_observation(observation: JudgeObservation, cards: Sequence[Card]) -> dict[str, Any]:
+    """一条判官观察在台账里的形态：三字段原样 + 反查到的卡号与该卡主旨句前几个字。"""
+    card_index: int | None = None
+    card_thesis = ""
+    quote = observation.quote.strip(QUOTE_TRIM)
+    for index, card in enumerate(cards):
+        if quote and quote in f"{card.thesis}\n{card.body}":
+            card_index = index
+            card_thesis = card.thesis[:THESIS_EXCERPT_CHARS]
+            break
+    return {
+        **observation.model_dump(),
+        "card_index": card_index,
+        "card_thesis": card_thesis,
+    }
 
 
 def default_writer_factory() -> CardWriter:
@@ -282,7 +319,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     anchors=anchors,
                 ),
             )
-            append_judge_ledger(domain, judge_run, package.releases)
+            append_judge_ledger(domain, judge_run, package.releases, observations, cards)
             blocked = [o for o in observations if o.check in blocking]
             if not blocked:
                 return UnitComposeResult(

@@ -410,6 +410,32 @@ async def test_judge_run_ledger_records_counts(
     ]
 
 
+async def test_judge_ledger_records_the_observations_verbatim(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """台账每条带判官报的原话（2026-09-08）：{check, quote, why} 与判官输出一致，外加反查到的卡号
+    与该卡主旨句前 20 字。计数字段原样保留。"""
+    ledger = tmp_path / "judge-ledger.jsonl"
+    monkeypatch.setenv(activities.JUDGE_LEDGER_ENV, str(ledger))
+    stray = JudgeObservation(check="cr-fabricated-fact", quote="不在文稿里的句子", why="反查不到卡")
+
+    result = await compose(ScriptedWriter([[GOOD_CARD]]), judge=ScriptedJudge([FABRICATION, stray]))
+
+    assert result.observations == [FABRICATION, stray]
+    line = json.loads(ledger.read_text(encoding="utf-8").strip())
+    assert line["checks"] == [
+        {"check": "cr-fabricated-fact", "version": 1, "status": "observing", "hits": 2}
+    ]
+    assert line["observations"] == [
+        {
+            **FABRICATION.model_dump(),
+            "card_index": 0,
+            "card_thesis": GOOD_CARD.thesis[:20],
+        },
+        {**stray.model_dump(), "card_index": None, "card_thesis": ""},
+    ]
+
+
 async def test_judge_run_absent_when_judge_never_ran() -> None:
     """规则层没放行 → 判官没跑 → 台账为 None：没送审就不该在分母里占一份。"""
     result = await compose(ScriptedWriter([[BAD_CARD]]))
