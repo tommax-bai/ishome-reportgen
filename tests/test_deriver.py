@@ -8,6 +8,7 @@ import json
 import pytest
 
 from reportgen_worker.deriver import (
+    COST_CLAIM_TEXT,
     DeriveRequest,
     DeriverOutputError,
     build_derive_messages,
@@ -525,16 +526,16 @@ def test_derive_prompt_groups_by_scene_with_one_judgment_per_group() -> None:
     assert "不许把同组落点写成相互约束的关系" in system
 
 
-def test_cost_anchor_not_claimed_is_rejected_at_derive_step() -> None:
-    """2026-09-08 真跑：金额条目在包里、推导没挂进任何主张，写作步补不上——在推导步就打回。"""
+def test_cost_anchor_not_claimed_gets_a_claim_appended_by_the_system() -> None:
+    """2026-09-08/09 真跑：金额条目在包里、推导两轮重开仍不挂——不求模型，系统追加一条主张挂上。"""
     raw = '[{"claim": "定制柜是造价里最吃钱的一项", "anchors": ["lkp-budget-share"]}]'
     known = {"lkp-budget-share", "lkp-cost-hydro-labor-sqm"}
-    with pytest.raises(DeriverOutputError, match="lkp-cost-hydro-labor-sqm") as info:
-        parse_claims(raw, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])
-    assert info.value.claims and info.value.claims[0].claim.startswith("定制柜")
+    claims = parse_claims(raw, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])
+    assert len(claims) == 2
+    assert claims[1].claim == COST_CLAIM_TEXT
+    assert claims[1].anchors == ["lkp-cost-hydro-labor-sqm"]
     raw_ok = (
         '[{"claim": "定制柜是造价里最吃钱的一项", "anchors": ["lkp-budget-share"]},'
         ' {"claim": "水电这笔钱按这家的面积已经能算出来", "anchors": ["lkp-cost-hydro-labor-sqm"]}]'
     )
-    claims = parse_claims(raw_ok, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])
-    assert len(claims) == 2
+    assert len(parse_claims(raw_ok, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])) == 2

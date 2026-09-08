@@ -26,6 +26,7 @@ v2.8（规则 1.9 两层模型）加进来的是**项名清单，不是值**：�
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Mapping, Sequence
@@ -57,6 +58,8 @@ DERIVE_LOGICAL_MODEL = "report-unit-derive.default"
 # prompt 只说抽象规则，词面在此确定性校验，命中即打回、理由走反馈循环。
 COUPLING_PHRASES = ("得一起定", "一起定", "配着调", "互相让", "协调着看", "其实是一回事")
 _CLAIMS_ADAPTER: TypeAdapter[list[NarrativeClaim]] = TypeAdapter(list[NarrativeClaim])
+logger = logging.getLogger(__name__)
+
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
 
 
@@ -98,6 +101,9 @@ class DeriveRequest(BaseModel):
     earlier_feedback: list[list[str]] = []
     """更早几稿的打回理由，由旧到新、不含最近这一稿（同写作步）：只带理由不带原稿，
     让它看见"这条我已经试过了"——缺的正是这句话。"""
+
+
+COST_CLAIM_TEXT = "按你家的建筑面积，眼下已经能先算出来的几笔钱"
 
 
 class DeriverOutputError(Exception):
@@ -388,17 +394,14 @@ def parse_claims(
             claims=cleaned,
         )
     # 算出来的钱必须落进某条主张（2026-09-08 真跑：包里两条金额，造价章一个「元」都没写）。
-    # 写作步只写推导给的几件事，推导不挂、写作补不上——所以这道判据在这一层，不在写作步。
+    # 写作步只写推导给的几件事，推导不挂、写作补不上。先试过"打回让模型重挂"——两轮重开仍不挂
+    # （2026-09-09 真跑）；靠提示词求模型记得，不如系统自己保证：没挂的由这里追加一条主张挂上，
+    # 主张句是固定的事实句（gen-locked 一类），数仍由写作步从记号取、渲染层从包取。
     claimed = {aid for c in cleaned for aid in c.anchors}
     unclaimed = [aid for aid in must_claim_ids if aid not in claimed]
     if unclaimed:
-        raise DeriverOutputError(
-            "算出来的钱没有落进任何一条主张："
-            + "、".join(unclaimed)
-            + " → 这几条是求值线按这家的量算出的金额（清单里标着「合计」），"
-            "是业主最想知道的「大概要花多少」，把它挂到讲钱的那条主张的 anchors 里",
-            cleaned,
-        )
+        logger.warning("推导没挂金额条目，系统追加主张：%s", unclaimed)
+        cleaned.append(NarrativeClaim(claim=COST_CLAIM_TEXT, anchors=list(unclaimed)))
     return cleaned
 
 
