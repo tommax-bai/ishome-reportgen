@@ -153,7 +153,8 @@ def test_production_code_never_references_the_fixture() -> None:
 @pytest.mark.parametrize(
     ("price_id", "cost_id", "round_to"),
     [
-        ("lkp-price-hydro-labor-sqm", "lkp-cost-hydro-labor-sqm", None),
+        # 水电人工（backend ac7cbd3，2026-09-08）：单价资产同批加了 cost_round_to: 100，真跑给 6600–7500
+        ("lkp-price-hydro-labor-sqm", "lkp-cost-hydro-labor-sqm", 100),
         # 全屋硬装（backend e48d8ed，2026-09-08）：种子声明 cost_round_to: 100，金额两端各自到百元
         ("lkp-price-hardfit-total-sqm", "lkp-cost-hardfit-total-sqm", 100),
     ],

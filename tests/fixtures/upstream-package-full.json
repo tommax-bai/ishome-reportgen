@@ -480,7 +480,7 @@
       "valueKind": "range",
       "value": {
         "min": 6600,
-        "max": 7480
+        "max": 7500
       },
       "referencePlane": null,
       "basisTag": "budget@v12",
