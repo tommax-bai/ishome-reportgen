@@ -283,6 +283,7 @@ def parse_claims(
     triggered_rules: Sequence[TriggeredRule] = (),
     item_names: Sequence[str] = (),
     banned_groups: Mapping[str, list[str]] | None = None,
+    must_claim_ids: Sequence[str] = (),
 ) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
@@ -386,6 +387,18 @@ def parse_claims(
             "用人话说那一项是什么场合、什么档位（下一步照抄就会写进卡片）",
             claims=cleaned,
         )
+    # 算出来的钱必须落进某条主张（2026-09-08 真跑：包里两条金额，造价章一个「元」都没写）。
+    # 写作步只写推导给的几件事，推导不挂、写作补不上——所以这道判据在这一层，不在写作步。
+    claimed = {aid for c in cleaned for aid in c.anchors}
+    unclaimed = [aid for aid in must_claim_ids if aid not in claimed]
+    if unclaimed:
+        raise DeriverOutputError(
+            "算出来的钱没有落进任何一条主张："
+            + "、".join(unclaimed)
+            + " → 这几条是求值线按这家的量算出的金额（清单里标着「合计」），"
+            "是业主最想知道的「大概要花多少」，把它挂到讲钱的那条主张的 anchors 里",
+            cleaned,
+        )
     return cleaned
 
 
@@ -420,4 +433,5 @@ class LlmNarrativeDeriver:
             request.triggered_rules,
             [item for a in request.anchors for item in a.items],
             request.banned_term_groups,
+            [a.lkp_id for a in request.anchors if a.lkp_id.startswith("lkp-cost-")],
         )

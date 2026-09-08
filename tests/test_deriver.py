@@ -523,3 +523,18 @@ def test_derive_prompt_groups_by_scene_with_one_judgment_per_group() -> None:
     assert "坏例＝把马桶、玄关柜、衣柜、沙发、走廊这几样互不相干的东西塞进同一条" in system
     # 归组不等于编关系：v2.5 §14.10 那条口径一字不动
     assert "不许把同组落点写成相互约束的关系" in system
+
+
+def test_cost_anchor_not_claimed_is_rejected_at_derive_step() -> None:
+    """2026-09-08 真跑：金额条目在包里、推导没挂进任何主张，写作步补不上——在推导步就打回。"""
+    raw = '[{"claim": "定制柜是造价里最吃钱的一项", "anchors": ["lkp-budget-share"]}]'
+    known = {"lkp-budget-share", "lkp-cost-hydro-labor-sqm"}
+    with pytest.raises(DeriverOutputError, match="lkp-cost-hydro-labor-sqm") as info:
+        parse_claims(raw, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])
+    assert info.value.claims and info.value.claims[0].claim.startswith("定制柜")
+    raw_ok = (
+        '[{"claim": "定制柜是造价里最吃钱的一项", "anchors": ["lkp-budget-share"]},'
+        ' {"claim": "水电这笔钱按这家的面积已经能算出来", "anchors": ["lkp-cost-hydro-labor-sqm"]}]'
+    )
+    claims = parse_claims(raw_ok, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])
+    assert len(claims) == 2
