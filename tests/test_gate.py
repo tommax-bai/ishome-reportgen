@@ -21,9 +21,12 @@ from reportgen_worker.gate import (
     unbacked_predicates,
 )
 from reportgen_worker.models import Card, ReportDataPackage
+from tests.fixtures import load_package as load_upstream_package
 from tests.support import PACKAGE_JSON, load_package
 
 PACKAGE = load_package()
+# 原文回放用的整册卷子（六域全）：support 那份只有 ergonomics/lighting 两域，装不下造价与材质。
+UPSTREAM = load_upstream_package("full")
 
 
 def checks_of(violations: list) -> set[str]:  # type: ignore[type-arg]
@@ -82,14 +85,211 @@ def test_thesis_body_duplicate_rejected() -> None:
     assert "gate-thesis-body-duplicate" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
 
 
-def test_thesis_body_duplicate_only_when_verbatim() -> None:
-    """只判逐字相同：不做相似度、不设阈值（阈值无数据依据，同"卡片数上限 6~8"被撤回的理由）。"""
+def test_thesis_as_body_prefix_is_a_duplicate() -> None:
+    """正文以主旨句开头再接一句填充话 = 照样是照搬（用户裁决 2026-09-07 报告线四条）。
+
+    此前这张卡是"只判逐字相同"的反例（过检）；改判后它是正例——主旨句整句在正文开头逐字出现。
+    """
     card = Card(
         thesis="台面高按主厨的身体定。",
         body="台面高按主厨的身体定：{lkp-counter-height} mm 这个区间，切菜时手腕不会架起来。",
         number_refs=["lkp-counter-height"],
     )
-    assert run_unit_gate([card], "ergonomics", PACKAGE) == []
+    assert "gate-thesis-body-duplicate" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
+
+
+def test_thesis_restated_clause_by_clause_with_you_filler_is_a_duplicate() -> None:
+    """2026-09-07 整册真跑原文回放（人体工学第二张卡）：主旨句四个小句逐句搬进正文、各接一句"你……"。
+
+    第一版"逐字相同"判不到它；改成"主旨句每一小句都逐字在正文里"之后命中。
+    """
+    card = Card(
+        thesis=(
+            "U型厨房两排间距做在 {lkp-kitchen-u-gap} mm 之间，"
+            "水槽深度做在 {lkp-sink-depth} mm 之间，"
+            "吊柜底沿距台面做在 {lkp-wall-cabinet-bottom} mm 之间，"
+            "冰箱散热净距不低于 {lkp-fridge-vent} mm。"
+        ),
+        body=(
+            "U型厨房两排间距做在 {lkp-kitchen-u-gap} mm 之间，"
+            "你在水槽洗菜、灶台炒菜、操作台备料之间转身时不蹭柜角、端着锅也能侧身绕过。"
+            "水槽深度做在 {lkp-sink-depth} mm 之间，你洗长把青菜时"
+            "手腕不必悬空吊着，刷锅时手肘也不用压着台面硬往下按。吊柜底沿距台面做在 "
+            "{lkp-wall-cabinet-bottom} mm 之间，你取常用调料罐或沥水篮时不用反复踮脚，抬手就能稳稳"
+            "拿到，肩膀不发酸。冰箱散热净距不低于 {lkp-fridge-vent} mm，你后期清理散热口时不用挪动"
+            "整机，蹲下后手能平伸进后隙擦净灰尘，不用歪着脖子探头、更不用拆墙。"
+        ),
+        number_refs=[
+            "lkp-kitchen-u-gap",
+            "lkp-sink-depth",
+            "lkp-wall-cabinet-bottom",
+            "lkp-fridge-vent",
+        ],
+    )
+    assert "gate-thesis-body-duplicate" in checks_of(run_unit_gate([card], "ergonomics", UPSTREAM))
+
+
+def test_thesis_said_again_in_other_words_is_not_a_duplicate() -> None:
+    """判的是逐字照搬不是意思重合：换了说法的正文过检（不做相似度、不设阈值）。"""
+    card = Card(
+        thesis="台面高按主厨的身体定。",
+        body="主厨个子高，台面就跟着抬到 {lkp-counter-height} mm，切菜时手腕不会架起来。",
+        number_refs=["lkp-counter-height"],
+    )
+    assert "gate-thesis-body-duplicate" not in checks_of(
+        run_unit_gate([card], "ergonomics", PACKAGE)
+    )
+
+
+def test_thesis_with_more_than_one_ref_is_rejected() -> None:
+    """主旨句只引一个数（规则 5.16）。原文回放：2026-09-07 人体工学第五张卡主旨句引了六个记号。"""
+    card = Card(
+        thesis=(
+            "马桶中线距侧墙不低于 {lkp-toilet-center-offset} mm，玄关柜深度不低于 "
+            "{lkp-entry-cabinet-depth} mm，平开门衣柜前净距不低于 {lkp-wardrobe-front} mm，"
+            "沙发至茶几间距做在 {lkp-sofa-table-gap} mm 之间，主通道不低于 {lkp-passage-main} mm，"
+            "次通道不低于 {lkp-passage-secondary} mm。"
+        ),
+        body="这六处各管一个动作，起身、换鞋、开柜门、落座、端汤穿行、拎包过道，各有各的余量。",
+        number_refs=[
+            "lkp-toilet-center-offset",
+            "lkp-entry-cabinet-depth",
+            "lkp-wardrobe-front",
+            "lkp-sofa-table-gap",
+            "lkp-passage-main",
+            "lkp-passage-secondary",
+        ],
+    )
+    hits = [
+        v
+        for v in run_unit_gate([card], "ergonomics", UPSTREAM)
+        if v.check == "gate-thesis-ref-count"
+    ]
+    assert len(hits) == 1
+    assert "6 个记号" in hits[0].detail
+
+
+def test_thesis_with_one_ref_passes_ref_count() -> None:
+    card = Card(
+        thesis="床面高度定在 {lkp-bed-height} mm 之间。",
+        body="你躺下时膝盖自然弯曲、起身时大腿能借上力，不用撑着床沿硬抬身体。",
+        number_refs=["lkp-bed-height"],
+    )
+    assert "gate-thesis-ref-count" not in checks_of(run_unit_gate([card], "ergonomics", UPSTREAM))
+
+
+def test_two_ranges_joined_by_dao_are_rejected() -> None:
+    """原文回放（2026-09-07 材质章）：「价差在 {a} 倍到 {b} 倍之间」——两档各自的区间被拼成一个。
+
+    单位「倍」夹在记号与连接词之间是正当写法（单值场合单位必须由句子写），判据要跨过它。
+    """
+    card = Card(
+        thesis="你家厨房的柜门不能用开放漆，因为油会渗进木纹缝里，擦不干净。",
+        body=(
+            "封闭漆把木纹完全封住，油沾上是浮在表面的一层，一擦就净。我们建议选封闭漆而非开放漆，"
+            "价差在 {lkp-material-tier-gap.medium-vs-low} 倍到 "
+            "{lkp-material-tier-gap.high-vs-medium} 倍之间——这差价买的是每天少一道擦缝的麻烦。"
+        ),
+        number_refs=["lkp-material-tier-gap.medium-vs-low", "lkp-material-tier-gap.high-vs-medium"],
+    )
+    hits = [
+        v
+        for v in run_unit_gate([card], "material", UPSTREAM)
+        if v.check == "gate-adjacent-range-refs"
+    ]
+    assert len(hits) == 1
+    assert "「到」" in hits[0].detail
+
+
+@pytest.mark.parametrize("connector", ["至", "—", "–", "～", "~"])
+def test_every_range_connector_is_caught(connector: str) -> None:
+    card = Card(
+        thesis="价差要按档看。",
+        body=(
+            f"价差在 {{lkp-material-tier-gap.medium-vs-low}} 倍{connector}"
+            "{lkp-material-tier-gap.high-vs-medium} 倍之间。"
+        ),
+        number_refs=["lkp-material-tier-gap.medium-vs-low", "lkp-material-tier-gap.high-vs-medium"],
+    )
+    assert "gate-adjacent-range-refs" in checks_of(run_unit_gate([card], "material", UPSTREAM))
+
+
+def test_two_ranges_in_separate_clauses_pass() -> None:
+    """各自成句、各说各档，就是这条判据要求的写法。"""
+    card = Card(
+        thesis="价差要按档看。",
+        body=(
+            "中档比低档贵 {lkp-material-tier-gap.medium-vs-low} 倍，"
+            "高档比中档贵 {lkp-material-tier-gap.high-vs-medium} 倍。"
+        ),
+        number_refs=["lkp-material-tier-gap.medium-vs-low", "lkp-material-tier-gap.high-vs-medium"],
+    )
+    assert "gate-adjacent-range-refs" not in checks_of(run_unit_gate([card], "material", UPSTREAM))
+
+
+def test_two_single_values_joined_by_dao_pass() -> None:
+    """两个单值写成"从 {a} 到 {b}"是正当写法：射程只有两端齐的区间。"""
+    card = Card(
+        thesis="插座和开关的高度各有各的手位。",
+        body=(
+            "从 {lkp-socket-height-common} mm 到 {lkp-switch-height} mm，"
+            "手从插拔到按开关不用换姿势。"
+        ),
+        number_refs=["lkp-socket-height-common", "lkp-switch-height"],
+    )
+    assert "gate-adjacent-range-refs" not in checks_of(
+        run_unit_gate([card], "ergonomics", UPSTREAM)
+    )
+
+
+def test_same_clause_in_two_cards_is_rejected() -> None:
+    """原文回放（2026-09-07 造价章第一卡与第四卡）：同一句「我们建议按行业通行做法，定制柜与主材是
+    造价里最吃钱的两项」逐字出现两次。两句在第二个逗号之后才分道，故按小句比。"""
+    first = Card(
+        thesis="定制柜和主材这两项加起来占了预算的大头，比其他所有分项加起来还重。",
+        body=(
+            "这是因为你家U型厨房连着整面阳台家政位，定制柜需要从厨房延展到阳台，投影面积大幅增加；"
+            "主材用量也随功能区延伸而同步拉高。我们建议按行业通行做法，定制柜与主材是造价里最吃钱的两项，"
+            "分别落在 {lkp-budget-driver.custom-cabinet} % 和 {lkp-budget-driver.main-material} %。"
+        ),
+        number_refs=["lkp-budget-driver.custom-cabinet", "lkp-budget-driver.main-material"],
+    )
+    fourth = Card(
+        thesis="预算的浮动空间主要藏在定制柜和主材这两档选择里。",
+        body=(
+            "选基础款还是升级款，对总支出的影响远大于软装或油漆这类小项。我们建议按行业通行做法，"
+            "定制柜与主材是造价里最吃钱的两项，合计占比已超过其余所有分项之和；"
+            "而三档情景价差中，中档与低档之间差 {lkp-budget-tier-gap.medium-vs-low} 倍。"
+        ),
+        number_refs=["lkp-budget-tier-gap.medium-vs-low"],
+    )
+    hits = [
+        v
+        for v in run_unit_gate([first, fourth], "budget", UPSTREAM)
+        if v.check == "gate-sentence-repeated-across-cards"
+    ]
+    assert hits, "两张卡逐字重复的小句必须被逮住"
+    assert all("card[0]、card[1]" in v.detail for v in hits)
+    assert any("最吃钱的两项" in v.detail for v in hits)
+
+
+def test_repeat_inside_one_card_or_short_clause_is_not_across_cards() -> None:
+    """同一张卡内重复归 thesis-body 那条；短于八字的小句（「我们建议」）是语言不是抄写。"""
+    cards = [
+        Card(
+            thesis="床面高度按你起身的姿势定。",
+            body="我们建议做在 {lkp-bed-height} mm 之间，床面高度按你起身的姿势定。",
+            number_refs=["lkp-bed-height"],
+        ),
+        Card(
+            thesis="床侧要留出穿鞋的余量。",
+            body="我们建议不低于 {lkp-bed-side} mm，坐着穿鞋小腿不碰柜。",
+            number_refs=["lkp-bed-side"],
+        ),
+    ]
+    assert "gate-sentence-repeated-across-cards" not in checks_of(
+        run_unit_gate(cards, "ergonomics", UPSTREAM)
+    )
 
 
 def test_bare_digit_rejected() -> None:

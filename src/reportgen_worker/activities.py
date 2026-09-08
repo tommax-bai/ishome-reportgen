@@ -34,6 +34,7 @@ from reportgen_worker.gate import (
     anchor_id_of,
     annotation_required_anchors,
     backed_predicates,
+    book_jargon_violations,
     collect_banned_groups,
     collect_banned_terms,
     provenance_note,
@@ -345,7 +346,7 @@ async def assemble_report_pages(request: PageAssembleRequest) -> ActivityResult:
 @activity.defn(name="report-book-check")
 async def check_report_book(request: BookCheckRequest) -> ActivityResult:
     """册级校验（渲染前）：首版为结构完整性——域齐/页非空/全册数字引用可解析/**锁定文案齐**/
-    **依据标注齐**；
+    **依据标注齐**/**整册无跨域行话**（含页脚题名，``book-jargon-across-domains``）；
     册级 cr-（branch-cap/set-closure/promise-fulfilled…）随 release 判据编译后物化执行。
 
     锁定文案齐不齐是**确定性**校验，故落规则层不落判官层：要求集在数据包（``locked_texts_by_domain``），
@@ -426,6 +427,9 @@ async def check_report_book(request: BookCheckRequest) -> ActivityResult:
                             detail=f"{page.page_id} 引用 {ref} 无落点对象",
                         )
                     )
+    # 行话跨域扫整册（规则 4.13 增补，用户裁决 2026-09-07）：单元层只拿本域禁词扫本域，
+    # 业主读的是整本；页脚"本页依据"上纸的是落点题名，一并扫（立案「净宽」就在页脚）。
+    violations.extend(book_jargon_violations(request.pages, request.package))
     return BookCheckResult(
         verdict="failed" if violations else "ok", violations=violations
     ).model_dump()

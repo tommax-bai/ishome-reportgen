@@ -5,8 +5,11 @@
 
 - **引擎纪律（gate-\\*）**：图 v0.2 §0 的硬性约束，代码即形态——数字只经 {lkp-*} 占位、
   占位必须可解析、必填非空、禁词零命中、客户语域禁裸 lkp- 标识名与裸项名、
-  语域示范不得被逐字抄进正文、**正文不得与主旨句逐字相同**（临时护栏，治本是叙事推导那一步）、
+  语域示范不得被逐字抄进正文、**正文不得逐句照搬主旨句**（临时护栏，治本是叙事推导那一步）、
   **记号旁边不替渲染层说话**（前不写边界词、后不补单位——记号渲出来是完整的说法）。
+  **报告线四条（用户裁决 2026-09-07 整册真跑立案）**：主旨句只引一个记号（规则 5.16）、
+  两个区间型记号不许用"到/至/—"接成一个区间、同章两张卡不许逐字重复同一小句、
+  册级各域行话取并集扫整册含页脚（规则 4.13 增补，``book-jargon-across-domains``）。
   不属 cr- 命名空间（cr- 是 release 数据，规则 4.10b）。
   **两层模型（规则 1.9，v2.8）**：一条落点＝若干项，正文可写 ``{lkp-x.项名}`` 引其中一项。
   ``single``/``range`` 只有一个匿名项，带项名即违规；其余五类的项名必须真实存在，
@@ -37,6 +40,7 @@ from reportgen_worker.models import (
     ITEM_NAME_RE,
     Card,
     NarrativeClaim,
+    Page,
     ProvenanceNote,
     ReportAnchor,
     ReportDataPackage,
@@ -655,6 +659,195 @@ def _adjacent_wording_violations(
     return violations
 
 
+_CLAUSE_SPLIT_RE = re.compile(r"[，。；！？：\n]")
+"""小句切分符（正文级断句符）：顿号「、」不算——它切的是并列词，切出来的碎片短到处处都在。"""
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _clauses(text: str) -> list[str]:
+    """文本 → 去空白的小句清单（空的丢掉），供逐字比对用。"""
+    return [c for c in (_WHITESPACE_RE.sub("", p) for p in _CLAUSE_SPLIT_RE.split(text)) if c]
+
+
+def thesis_restated_in_body(thesis: str, body: str) -> bool:
+    """主旨句是不是被逐句原样搬进了正文（``gate-thesis-body-duplicate`` 的判定，v2.9）。
+
+    去空白、按断句符把主旨句切成小句，每一小句都逐字出现在（去空白的）正文里即成立。
+    "正文逐字等于主旨句""正文以主旨句为前缀"都是它的子形态；2026-09-07 真跑那种
+    "逐句照搬、每句后接一句你……"也在射程内。
+    """
+    clauses = _clauses(thesis)
+    compact_body = _WHITESPACE_RE.sub("", body)
+    return bool(clauses) and all(clause in compact_body for clause in clauses)
+
+
+RANGE_CONNECTORS = ("到", "至", "—", "–", "～", "~")
+"""把两个记号接成"从这头到那头"的连接词（含常见的横线与波浪线写法）。"""
+
+
+def _renders_two_sided_range(anchor: ReportAnchor, item_name: str | None) -> bool:
+    """这个记号渲出来的值里有没有两端齐的区间（{min,max} 都在）。
+
+    与 :func:`bound_expectation` 同一套取值：按项引用看那一项，整条引用看全部项。
+    """
+    value = anchor.value
+    if item_name is not None:
+        values = [value[item_name]] if isinstance(value, dict) and item_name in value else []
+    elif anchor.has_items:
+        values = list(value.values()) if isinstance(value, dict) else []
+    else:
+        values = [value]
+    return any(isinstance(v, dict) and set(v) >= _BOUND_KEYS for v in values)
+
+
+def _adjacent_range_ref_violations(
+    label: str, text: str, anchors_by_id: dict[str, ReportAnchor]
+) -> list[Violation]:
+    """两个区间型记号被连接词直接接起来（``gate-adjacent-range-refs``，用户裁决 2026-09-07）。
+
+    立案（2026-09-07 整册真跑，材质章两张卡）：「价差在 {a} 倍到 {b} 倍之间」——渲出来是
+    "1.4–2.0 倍到 1.5–2.5 倍之间"，两个各管一档的区间被拼成一个不存在的大区间，读者看到四个数
+    却不知道哪档对哪档。**关系不由 LLM 决定**：数据里没有"从 a 的低端到 b 的高端"这层关系，
+    句子就不许拼出来。
+
+    判法：相邻两个记号之间，去掉空白与前一个记号的单位后**只剩一个连接词**，且两个记号
+    渲出来的都是两端齐的区间。两个单值用"从 {a} 到 {b}"是正当写法，不在射程内。
+    """
+    violations: list[Violation] = []
+    matches = list(PLACEHOLDER_RE.finditer(text))
+    for left, right in zip(matches, matches[1:], strict=False):
+        left_anchor = anchors_by_id.get(left.group(1))
+        right_anchor = anchors_by_id.get(right.group(1))
+        if left_anchor is None or right_anchor is None:
+            continue  # 落点认不出已由 ref_violation 报过
+        between = _WHITESPACE_RE.sub("", text[left.end() : right.start()])
+        if left_anchor.unit and between.startswith(left_anchor.unit):
+            between = between[len(left_anchor.unit) :]
+        if between not in RANGE_CONNECTORS:
+            continue
+        if not (
+            _renders_two_sided_range(left_anchor, left.group(2))
+            and _renders_two_sided_range(right_anchor, right.group(2))
+        ):
+            continue
+        clause_match = _CLAUSE_TAIL_RE.search(text[: left.start()])
+        clause = clause_match.group(0) if clause_match else ""
+        violations.append(
+            Violation(
+                check="gate-adjacent-range-refs",
+                detail=(
+                    f"{label} 「{cite(clause)}{left.group(0)}…{between}…{right.group(0)}」"
+                    f"两个区间用「{between}」接成了一个区间 → 两个区间各自成句、各说清它管哪一档"
+                ),
+            )
+        )
+    return violations
+
+
+REPEATED_CLAUSE_MIN_LENGTH = 8
+"""跨卡逐字重复的小句要多长才算（记号不计入字数）：用户裁决 2026-09-07 给的数——
+短于这个的小句（「我们建议」「你家厨房」）在同一章反复出现是语言不是抄写。"""
+
+
+def _repeated_clause_violations(cards: list[Card]) -> list[Violation]:
+    """同一章内两张卡出现逐字相同的小句（``gate-sentence-repeated-across-cards``，章级判据）。
+
+    立案（2026-09-07 整册真跑，造价章第一卡与第四卡）：「我们建议按行业通行做法，定制柜与主材
+    是造价里最吃钱的两项」两张卡逐字相同——两句在第二个逗号之后才分道，故按**小句**比
+    （断句符含逗号），按整句比逮不住立案样本。同一张卡内不算（主旨句进正文归
+    ``gate-thesis-body-duplicate``）。
+    """
+    first_seen: dict[str, int] = {}
+    hits: dict[str, list[int]] = {}
+    for index, card in enumerate(cards):
+        seen_here: set[str] = set()
+        for clause in _clauses(f"{card.thesis}\n{card.body}"):
+            if len(PLACEHOLDER_RE.sub("", clause)) < REPEATED_CLAUSE_MIN_LENGTH:
+                continue
+            if clause in seen_here:
+                continue
+            seen_here.add(clause)
+            if clause in first_seen:
+                hits.setdefault(clause, [first_seen[clause]]).append(index)
+            else:
+                first_seen[clause] = index
+    return [
+        Violation(
+            check="gate-sentence-repeated-across-cards",
+            detail=(
+                f"「{cite(clause)}」在 {'、'.join(f'card[{i}]' for i in indices)} 逐字重复 → "
+                "只留一处，另外那张卡换成它自己那件事的话"
+            ),
+        )
+        for clause, indices in sorted(hits.items(), key=lambda kv: (kv[1][0], kv[0]))
+    ]
+
+
+JARGON_GROUPS = ("domain_extra", "jargon")
+"""persona ``banned_terms`` 里装**行话**的桶名（种子 yaml 的键：多数域叫 domain_extra，灯光域叫
+jargon）。公共四组（弱词/方法论/越权/责任）不在其内——那四组按域各扫各的，在单元层。"""
+
+
+def jargon_terms_across_domains(package: ReportDataPackage) -> dict[str, list[str]]:
+    """各域 persona 的行话取并集：词面 → 它是哪几个域的行话（升序，确定性）。"""
+    owners: dict[str, set[str]] = {}
+    for domain, personas in package.personas_by_domain.items():
+        for persona in personas:
+            for group in JARGON_GROUPS:
+                value = persona.banned_terms.get(group)
+                if isinstance(value, list):
+                    for term in value:
+                        if isinstance(term, str) and term:
+                            owners.setdefault(term, set()).add(domain)
+    return {term: sorted(domains) for term, domains in sorted(owners.items())}
+
+
+def book_jargon_violations(pages: Sequence[Page], package: ReportDataPackage) -> list[Violation]:
+    """整册扫行话（``book-jargon-across-domains``，规则 4.13 增补，用户裁决 2026-09-07）。
+
+    单元层只拿本域禁词扫本域正文；业主读的是整本，灯光域的「照度」写进人体工学章一样读不懂。
+    故册级把各域行话取并集，扫每一页的主旨句、正文与页脚"本页依据"——页脚上纸的是落点题名
+    （渲染层 `_provenance_line`：题名 + 取数时间 + 状态，后两项是闭集），故扫的是题名。
+    立案：2026-09-07 整册人体工学页脚「主通道净宽」「次通道净宽」，「净宽」正是本域自己的行话。
+    题名是 release 数据，命中的路在求值线改题名，成文线不改写（规则 2.4 零生成）。
+    """
+    jargon = jargon_terms_across_domains(package)
+    anchors_by_id = {a.lkp_id: a for a in package.anchors}
+    violations: list[Violation] = []
+    for page in pages:
+        for index, card in enumerate(page.cards):
+            text = f"{card.thesis}\n{card.body}"
+            for term, domains in jargon.items():
+                if term in text:
+                    violations.append(
+                        Violation(
+                            check="book-jargon-across-domains",
+                            detail=(
+                                f"{page.page_id} card[{index}] 出现「{term}」"
+                                f"（{'、'.join(domains)} 域行话） → "
+                                "整册对业主不说行话，那件事用业主读得懂的话说"
+                            ),
+                        )
+                    )
+        for note in page.provenance_notes:
+            anchor = anchors_by_id.get(note.lkp_id)
+            if anchor is None:
+                continue  # 引用解析不到由 gate-number-ref-unresolved 报
+            for term, domains in jargon.items():
+                if term in anchor.name:
+                    violations.append(
+                        Violation(
+                            check="book-jargon-across-domains",
+                            detail=(
+                                f"{page.page_id} 页脚依据「{anchor.name}」带「{term}」"
+                                f"（{'、'.join(domains)} 域行话） → "
+                                "题名是 release 数据，在求值线改题名，成文线不改写"
+                            ),
+                        )
+                    )
+    return violations
+
+
 def run_package_gate(domain: str, package: ReportDataPackage) -> list[Violation]:
     """写作前的生产方契约守卫：数据包本身违约的，不必烧一次 LLM 调用才发现。
 
@@ -766,24 +959,41 @@ def run_unit_gate(
             violations.append(
                 Violation(check="gate-required-field", detail=f"{label} thesis/body 有空的 → 补齐")
             )
-        # 正文逐字等于主旨句 = 这张卡没有承载任何推导，等于把落点表换了个排版（违规则 1.6
+        # 正文把主旨句原样搬进去 = 这张卡没有承载任何推导，等于把落点表换了个排版（违规则 1.6
         # "不以无内容的密度充数"，图 v0.2 §3 卡片是叙事推导的产物而非落点表的另一种形态）。
         # 真跑立案：2026-08-29 ergonomics 单元 verdict=ok，22 张卡 22/22 逐字相同。
         #
-        # **这是临时护栏，不是处置**：治本是补上叙事推导那一步（先定讲哪几件事，卡片按事组织），
-        # 只加这条机检，模型补一句填充话就绕过去了——把看得见的退化变成看不见的填充。留它的理由
-        # 只有一条：**"正文逐字等于主旨句"没有正当用例**，逐字比对零误判，代价是零。
-        # 判据形态严格限于**逐字相同**：不做相似度、不设阈值（阈值无数据依据，同卡片数上限那条）。
-        elif card.thesis.strip() == card.body.strip():
+        # 第一版只判"逐字相同"，2026-09-07 整册真跑印证了它被绕过的形态（用户裁决，报告线四条）：
+        # 人体工学六张卡里五张，正文＝主旨句逐句照搬、每句后面各接一句"你……"——
+        # 「U型厨房两排间距做在 {…} 之间，你在水槽洗菜……。水槽深度做在 {…} 之间，你洗长把青菜……」。
+        # 故判据改成**主旨句的每一小句都逐字出现在正文里**（去空白，按断句符切）：
+        # "正文以主旨句为前缀"是它的子形态（前缀成立则每句都在）；照搬后各接一句填充话也逃不掉。
+        # 仍不做相似度、不设阈值：小句要么逐字在、要么不在。
+        elif thesis_restated_in_body(card.thesis, card.body):
             violations.append(
                 Violation(
                     check="gate-thesis-body-duplicate",
                     detail=(
-                        f"{label} 「{cite(card.thesis)}」正文与主旨句逐字相同 → "
-                        "正文改成说为什么是这个数、它管哪一刻"
+                        f"{label} 「{cite(card.thesis)}」正文把主旨句逐句原样搬了进去 → "
+                        "正文不重抄主旨句，改成说为什么是这个数、它管哪一刻"
                     ),
                 )
             )
+        # 主旨句最多引一个数（规则 5.16，用户裁决 2026-09-07）：立案样本是人体工学第五张卡的主旨句
+        # 一口气引了六个记号——那不是主旨句，是这张卡的落点清单换了个位置。判的是记号个数
+        # 不是字数：数字只经记号进正文，记号数就是"这句话报了几个数"。
+        thesis_refs = PLACEHOLDER_RE.findall(card.thesis)
+        if len(thesis_refs) > 1:
+            violations.append(
+                Violation(
+                    check="gate-thesis-ref-count",
+                    detail=(
+                        f"{label} 主旨句「{cite(card.thesis)}」引了 {len(thesis_refs)} 个记号 → "
+                        "主旨句只引一个数，其余的数放进正文各说各的"
+                    ),
+                )
+            )
+        violations.extend(_adjacent_range_ref_violations(label, text, anchors_by_id))
 
         placeholders = placeholder_refs(text)
         # 引用合法性按**记号**判（v2.8 两层模型）：落点段认不认识、项名指不指得到，
@@ -1004,5 +1214,7 @@ def run_unit_gate(
                     ),
                 )
             )
+    # 章级：两张卡逐字重复同一小句（用户裁决 2026-09-07，报告线四条）——要看整章才判得出。
+    violations.extend(_repeated_clause_violations(cards))
 
     return violations
