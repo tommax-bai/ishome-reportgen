@@ -79,9 +79,11 @@ MOCK_ANCHOR_IDS: frozenset[str] = frozenset(
     {"lkp-rug-size-rule", "lkp-storage-total-meters", "lkp-budget-driver"}
 )
 """齐全档里**我们造出来的**那三条落点（其余 58 条：55 条取自真跑，值是求值线自己算的；
-1 条单价 ``lkp-price-hardfit-total-sqm`` 照业务侧种子 ``attr-price-hardfit-total-sqm``（backend e48d8ed）按考卷城市档取值；
-2 条金额 ``lkp-cost-hydro-labor-sqm`` / ``lkp-cost-hardfit-total-sqm`` 按求值线 ``projectWorkItemCost`` 的算法
-从单价 × 建筑面积派生、形态逐字段照它——它们不是 mock，考卷上金额与单价对不上时 test_upstream_fixtures 会红）。
+1 条单价 ``lkp-price-hardfit-total-sqm`` 照业务侧种子 ``attr-price-hardfit-total-sqm``
+（backend e48d8ed）按考卷城市档取值；
+2 条金额 ``lkp-cost-hydro-labor-sqm`` / ``lkp-cost-hardfit-total-sqm`` 按求值线
+``projectWorkItemCost`` 的算法从单价 × 建筑面积派生、形态逐字段照它——它们不是 mock，
+考卷上金额与单价对不上时 test_upstream_fixtures 会红）。
 
 它们与"部分缺档里那三条缺口"是同一批**不是巧合**：真跑里求值线算不出来的，正好就是要造
 齐全档时不得不 mock 的那三条。两档因此是同一件事的两面——上游算出来了 / 上游没算出来。

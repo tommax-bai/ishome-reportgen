@@ -1267,5 +1267,41 @@ def run_unit_gate(
             )
     # 章级：两张卡逐字重复同一小句（用户裁决 2026-09-07，报告线四条）——要看整章才判得出。
     violations.extend(_repeated_clause_violations(cards))
+    # 章级：算出来的钱必须落进正文（2026-09-08 真跑：包里有水电人工费与硬装总价两条金额，
+    # 造价章一个「元」都没写——业主最想知道的数不能由写手可选）。
+    violations.extend(_cost_anchor_unused_violations(cards, domain_anchors))
 
     return violations
+
+
+def _cost_anchor_unused_violations(
+    cards: list[Card], domain_anchors: list[ReportAnchor]
+) -> list[Violation]:
+    """本域里求值线派生的金额条目（``lkp-cost-*``）一条都没被引用（``gate-cost-anchor-unused``，章级）。
+
+    金额是"单价 × 这家的量"算出来的、带推导原文，是整册里离业主最近的数（"要花多少钱"）；
+    它在包里却不进正文＝把最要紧的一句留给了写手的取舍。判据：每条 ``lkp-cost-`` 条目
+    都至少被一张卡引用（记号或 ``number_refs``），缺哪条报哪条。
+    """
+    cost_ids = sorted(a.lkp_id for a in domain_anchors if a.lkp_id.startswith("lkp-cost-"))
+    if not cost_ids:
+        return []
+    referenced: set[str] = set()
+    for card in cards:
+        referenced |= {anchor_id_of(ref) for ref in card.number_refs}
+        referenced |= {anchor_id_of(ref) for ref in placeholder_refs(f"{card.thesis}\n{card.body}")}
+    missing = [cid for cid in cost_ids if cid not in referenced]
+    return (
+        [
+            Violation(
+                check="gate-cost-anchor-unused",
+                detail=(
+                    f"算出来的钱没进正文：{'、'.join(missing)} → 这几条是求值线按这家的量算出的金额，"
+                    "至少要在一张卡里引用它的记号，让业主看到「大概要花多少」"
+                ),
+            )
+            for _ in [0]
+        ]
+        if missing
+        else []
+    )

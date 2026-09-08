@@ -1272,3 +1272,32 @@ def test_chapter_that_uses_no_valued_anchor_is_pushed_back() -> None:
     # 只要有一条落点真的露面，这条判据就不该响——它判的是"整章一条都没用"
     alive = [Card(thesis=f"这件事定在 {{{anchors[0].lkp_id}}}。", body="配套的理由写在这里。")]
     assert "gate-anchors-all-unused" not in [v.check for v in run_unit_gate(alive, domain, PACKAGE)]
+
+
+def test_cost_anchor_left_out_of_budget_chapter_is_rejected() -> None:
+    """2026-09-08 真跑：包里有水电人工费与硬装总价两条金额，造价章没写一个「元」。"""
+    package = load_upstream_package("full")
+    cost_ids = [
+        a.lkp_id for a in package.domain_anchors("budget") if a.lkp_id.startswith("lkp-cost-")
+    ]
+    assert cost_ids, "考卷里应有金额条目"
+    card = Card(
+        thesis="定制柜是造价里最吃钱的一项。",
+        body="定制柜在总造价中占 {lkp-budget-share} 。",
+        number_refs=["lkp-budget-share"],
+    )
+    hits = [
+        v for v in run_unit_gate([card], "budget", package) if v.check == "gate-cost-anchor-unused"
+    ]
+    assert len(hits) == 1
+    for cid in cost_ids:
+        assert cid in hits[0].detail
+    body = "水电人工费合计 " + " 元，硬装全包 ".join("{" + cid + "}" for cid in cost_ids) + " 元。"
+    card_ok = Card(
+        thesis=card.thesis, body=card.body + body, number_refs=[*card.number_refs, *cost_ids]
+    )
+    assert not [
+        v
+        for v in run_unit_gate([card_ok], "budget", package)
+        if v.check == "gate-cost-anchor-unused"
+    ]
