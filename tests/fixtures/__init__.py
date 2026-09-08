@@ -28,12 +28,12 @@ release 一变、种子一改，卷子就换了——"整册四跑一成"这种�
 
 ## 三档分别是什么
 
-同一户人家、同一批 59 条落点，**只差上游算出来了几条**——所以三档之间可比：
+同一户人家、同一批 61 条落点，**只差上游算出来了几条**——所以三档之间可比：
 
-- ``full`` **齐全档**：59 条全给值，0 缺口。上游把该给的量都给全了。
-- ``partial-gaps`` **部分缺档**：56 条有值 + 3 条缺口。就是 2026-08-31 那次六章整册真跑
+- ``full`` **齐全档**：61 条全给值，0 缺口。上游把该给的量都给全了。
+- ``partial-gaps`` **部分缺档**：58 条有值 + 3 条缺口。就是 2026-08-31 那次六章整册真跑
   的形状（缺口的 ``reason``/``detail`` 逐字来自那次真跑，只补了当时还没有的 ``basisTag``）。
-- ``mostly-gaps`` **大量缺档**：12 条有值（每域 2 条）+ 47 条缺口。测"上游给得很少时
+- ``mostly-gaps`` **大量缺档**：12 条有值（每域 2 条）+ 49 条缺口。测"上游给得很少时
   我们怎么应对"——按规则 4.18 宁薄勿撑，缺口只作为"别编它"的禁令下发，不作为可写的题材。
 
 ## 为什么只存一个 JSON、另两档由这里派生
@@ -78,9 +78,10 @@ _FULL_PACKAGE_PATH = Path(__file__).parent / "upstream-package-full.json"
 MOCK_ANCHOR_IDS: frozenset[str] = frozenset(
     {"lkp-rug-size-rule", "lkp-storage-total-meters", "lkp-budget-driver"}
 )
-"""齐全档里**我们造出来的**那三条落点（其余 56 条：55 条取自真跑，值是求值线自己算的；
-1 条金额 ``lkp-cost-hydro-labor-sqm`` 按求值线 ``projectWorkItemCost`` 的算法从真跑单价 × 建筑面积
-派生、形态逐字段照它——它不是 mock，考卷上金额与单价对不上时 test_upstream_fixtures 会红）。
+"""齐全档里**我们造出来的**那三条落点（其余 58 条：55 条取自真跑，值是求值线自己算的；
+1 条单价 ``lkp-price-hardfit-total-sqm`` 照业务侧种子 ``attr-price-hardfit-total-sqm``（backend e48d8ed）按考卷城市档取值；
+2 条金额 ``lkp-cost-hydro-labor-sqm`` / ``lkp-cost-hardfit-total-sqm`` 按求值线 ``projectWorkItemCost`` 的算法
+从单价 × 建筑面积派生、形态逐字段照它——它们不是 mock，考卷上金额与单价对不上时 test_upstream_fixtures 会红）。
 
 它们与"部分缺档里那三条缺口"是同一批**不是巧合**：真跑里求值线算不出来的，正好就是要造
 齐全档时不得不 mock 的那三条。两档因此是同一件事的两面——上游算出来了 / 上游没算出来。

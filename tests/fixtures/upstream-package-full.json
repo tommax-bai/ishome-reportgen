@@ -449,6 +449,30 @@
       "presentation": "REFERENCE_ONLY"
     },
     {
+      "lkpId": "lkp-cost-hardfit-total-sqm",
+      "name": "硬装全包行情单价（按建筑面积计价口径）合计",
+      "numberClass": "analysis",
+      "unit": "元",
+      "valueKind": "range",
+      "value": {
+        "min": 110000,
+        "max": 330000
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "求值线按「单价 × 量」算出：单价 1000–3000 元/㎡（城市档 一线）× building_area_sqm 110.0 ＝ 110000–330000，取整到 100 元 ＝ 110000–330000。单价是经验条目、区间本身就宽，故金额区间随之宽。",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "土巴兔装修大学 to8to.com/yezhu/z338598.html（2025-11-04，取数 2026-09-08）：「一线城市普通住宅硬装报价每平方米约1000-3000元，二线城市则在800-2000元区间波动」；同文转载于新浪 k.sina.com.cn/article_7857141524_1d452771401901wi28.html（2026-04-15）",
+        "effectiveFrom": "2026-09-08",
+        "effectiveTo": "2026-12-08",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
       "lkpId": "lkp-cost-hydro-labor-sqm",
       "name": "水电改造人工费（按建筑面积计价口径）合计",
       "numberClass": "analysis",
@@ -1030,6 +1054,30 @@
         "source": "m.sohu.com/a/1025834698_122469136 与 zx123.cn/2021/1220/2353557（每点位 150-300 元；100㎡ 约 50-70 位）",
         "effectiveFrom": "2026-08-27",
         "effectiveTo": "2026-11-27",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
+      "lkpId": "lkp-price-hardfit-total-sqm",
+      "name": "硬装全包行情单价（按建筑面积计价口径）",
+      "numberClass": "analysis",
+      "unit": "元/㎡",
+      "valueKind": "range",
+      "value": {
+        "min": 1000,
+        "max": 3000
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "土巴兔装修大学 to8to.com/yezhu/z338598.html（2025-11-04，取数 2026-09-08）：「一线城市普通住宅硬装报价每平方米约1000-3000元，二线城市则在800-2000元区间波动」；同文转载于新浪 k.sina.com.cn/article_7857141524_1d452771401901wi28.html（2026-04-15）",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "土巴兔装修大学 to8to.com/yezhu/z338598.html（2025-11-04，取数 2026-09-08）：「一线城市普通住宅硬装报价每平方米约1000-3000元，二线城市则在800-2000元区间波动」；同文转载于新浪 k.sina.com.cn/article_7857141524_1d452771401901wi28.html（2026-04-15）",
+        "effectiveFrom": "2026-09-08",
+        "effectiveTo": "2026-12-08",
         "calibration": "calibrated",
         "annotationRequired": false
       },
