@@ -7,6 +7,12 @@ prompt 是第一道不是门禁（判据下沉次序 schema > 规则 > prompt > 
 from __future__ import annotations
 
 import copy
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+import pytest
 
 from reportgen_worker.gate import (
     backed_predicates,
@@ -14,8 +20,22 @@ from reportgen_worker.gate import (
     run_unit_gate,
     unbacked_predicates,
 )
-from reportgen_worker.models import Card, PersonaAsset, ReportDataPackage, Violation
-from reportgen_worker.writer import WriterRequest, build_messages, judgment_pairs
+from reportgen_worker.models import (
+    Card,
+    NarrativeClaim,
+    PersonaAsset,
+    ReportDataPackage,
+    Violation,
+)
+from reportgen_worker.writer import (
+    LAYOUT_FEATURE_MEANINGS,
+    WriterRequest,
+    build_messages,
+    judgment_pairs,
+    layout_feature_facts,
+)
+from tests.fixtures import TIERS, Tier
+from tests.fixtures import load_package as load_tier
 from tests.support import PACKAGE_JSON, load_package
 
 PACKAGE = load_package()
@@ -501,3 +521,101 @@ def test_discipline_quotes_the_labels_the_anchor_lines_actually_print() -> None:
         assert label in system, f"纪律没提到档名「{label}」"
         assert label in user, f"落点行没印出档名「{label}」"
     assert "未过门" not in system  # 已废的标签不再出现在纪律里
+
+
+# ---------------------------------------------------------------------------
+# 写手看到的家庭事实全是真的（2026-09-08）+ 标题一个数、正文不复读（规则 5.16）
+# ---------------------------------------------------------------------------
+
+INVENTED_HOUSEHOLD_FACTS = ("家政", "老房", "侧边")
+"""同 test_deriver：9-07 册里出现过、输入包里一个字都没有的三样"家庭事实"。"""
+
+_CONTRACT_LAYOUT_FEATURES = (
+    Path.home() / "codes" / "ishome-contracts" / "rulebook" / "layout_features.json"
+)
+
+
+def test_layout_features_reach_the_writer_as_plain_facts_not_as_a_map() -> None:
+    """``layoutFeatures`` 按契约闭集译成人话再下发，键名与 JSON 形态一个都不进 prompt。
+
+    立案：旧形态 ``{"entrance_shape": "side"}`` 原样 ``json.dumps`` 给写手，被直译成「侧边户型」。
+    """
+    profile = PACKAGE.anonymous_profile.model_copy(
+        update={"layout_features": {"kitchen_u_shape": "厨房台面沿三面墙布置，呈 U 形"}}
+    )
+    user = build_messages(request_for().model_copy(update={"profile": profile}))[1]["content"]
+    assert "这家人的情况（匿名）：厨房为 U 形" in user
+    assert "kitchen_u_shape" not in user
+    assert '"kitchen_u_shape"' not in user and '{"' not in user  # 不再是 JSON
+    # 解析侧的依据文字不进写作 prompt：写手要的是事实，不是我们为什么这么判
+    assert "沿三面墙" not in user
+
+
+def test_layout_feature_outside_the_closed_set_is_dropped_with_a_warning(caplog: Any) -> None:
+    """闭集外的键**不下发并记 warning**——不许猜译：猜出来的"事实"会被写进业主的报告。"""
+    profile = PACKAGE.anonymous_profile.model_copy(
+        update={"layout_features": {"entrance_shape": "side", "kitchen_u_shape": "图上厨房呈 U 形"}}
+    )
+    with caplog.at_level(logging.WARNING, logger="reportgen_worker.writer"):
+        user = build_messages(request_for().model_copy(update={"profile": profile}))[1]["content"]
+    assert "side" not in user and "侧边" not in user and "entrance_shape" not in user
+    assert "厨房为 U 形" in user  # 闭集内的照常下发，不因同伴越界整行作废
+    assert any("entrance_shape" in r.getMessage() for r in caplog.records), "越界键没记 warning"
+
+
+def test_empty_layout_features_say_so() -> None:
+    assert layout_feature_facts({}) == []
+    profile = PACKAGE.anonymous_profile.model_copy(update={"layout_features": {}})
+    user = build_messages(request_for().model_copy(update={"profile": profile}))[1]["content"]
+    assert "这家人的情况（匿名）：（暂无户型信息）" in user
+
+
+@pytest.mark.skipif(not _CONTRACT_LAYOUT_FEATURES.exists(), reason="本机没有契约仓，闭集比对跳过")
+def test_layout_feature_meanings_match_the_contract_closed_set() -> None:
+    """闭集的消费面与契约仓逐字同：契约加一条标记，这里同批加一行，漂了这里红。"""
+    contract = json.loads(_CONTRACT_LAYOUT_FEATURES.read_text(encoding="utf-8"))
+    expected = {key: entry["meaning"] for key, entry in contract["features"].items()}
+    assert expected == LAYOUT_FEATURE_MEANINGS
+
+
+def _tier_request(tier: Tier, domain: str) -> WriterRequest:
+    package = load_tier(tier)
+    return WriterRequest(
+        domain=domain,
+        persona=package.personas_by_domain[domain][0],
+        claims=[NarrativeClaim(claim="这一章先讲这家人怎么用这个空间。", anchors=[])],
+        anchors=package.domain_anchors(domain),
+        gaps=package.domain_gaps(domain),
+        profile=package.anonymous_profile,
+        banned_terms=collect_banned_terms(domain, package),
+        backed_predicates=backed_predicates(domain, package),
+        unbacked_predicates=unbacked_predicates(domain, package),
+        banned_term_groups=package.banned_term_groups_by_domain.get(domain, {}),
+    )
+
+
+@pytest.mark.parametrize("tier", TIERS)
+def test_writer_prompt_carries_no_household_fact_the_package_did_not_give(tier: Tier) -> None:
+    """三档考卷 × 六章：写作 prompt 里一个编出来的家庭事实都没有（同推导步那条守卫）。"""
+    package = load_tier(tier)
+    for domain in package.domains:
+        text = "\n".join(m["content"] for m in build_messages(_tier_request(tier, domain)))
+        leaked = [w for w in INVENTED_HOUSEHOLD_FACTS if w in text]
+        assert not leaked, f"{tier}/{domain} 的写作 prompt 带了输入包里没有的家庭事实：{leaked}"
+
+
+def test_writer_prompt_pins_household_facts_to_the_profile_line() -> None:
+    system = build_messages(request_for())[0]["content"]
+    assert "关于这家人的事实**只有「这家人的情况」那一行给的几条**" in system
+
+
+def test_thesis_takes_one_token_and_body_does_not_echo_it() -> None:
+    """规则 5.16 的写作侧：主旨句最多一个记号、其余数进正文逐条给、正文不以主旨句开头复读。
+
+    机检判据在 gate（"整句相等"改"前缀包含"），prompt 与它同口径——两处不一致写手会被反复打回
+    却不知道该怎么改。
+    """
+    system = build_messages(_tier_request("full", "ergonomics"))[0]["content"]
+    assert "**里面最多放一个记号**" in system
+    assert "其余的数全放正文，一条一句、逐条给" in system
+    assert "正文开头把主旨句再抄一遍" in system

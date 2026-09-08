@@ -449,6 +449,30 @@
       "presentation": "REFERENCE_ONLY"
     },
     {
+      "lkpId": "lkp-cost-hydro-labor-sqm",
+      "name": "水电改造人工费（按建筑面积计价口径）合计",
+      "numberClass": "analysis",
+      "unit": "元",
+      "valueKind": "range",
+      "value": {
+        "min": 6600,
+        "max": 7480
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "求值线按「单价 × 量」算出：单价 60–68 元/㎡（城市档 一线）× building_area_sqm 110.0。单价是经验条目、区间本身就宽，故金额区间随之宽。",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "图纸之家 tuzhizhijia.com/fangchan/8468（2023 全国 43 份水电报价：上海 60/北京 68/深广 68/天津 58/长沙武汉 55/渝蓉 35/贵州 25-35/金华 50/杭州 40-50）",
+        "effectiveFrom": "2026-08-28",
+        "effectiveTo": "2026-11-28",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
       "lkpId": "lkp-counter-height",
       "name": "橱柜台面高",
       "numberClass": "selection",
@@ -3799,9 +3823,7 @@
     "eyeHeightMm": 1600,
     "tvScreenHeightMm": 600,
     "layoutFeatures": {
-      "kitchen_shape": "U",
-      "entrance_shape": "side",
-      "sunken_bathroom": "true"
+      "kitchen_u_shape": "厨房台面沿三面墙布置，呈 U 形"
     },
     "cityTier": "一线",
     "buildingAreaSqm": 110.0,

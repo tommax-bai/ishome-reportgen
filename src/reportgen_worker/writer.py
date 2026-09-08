@@ -23,7 +23,7 @@ persona 四件（规则 4.13）在本仓的消费面已齐：①身份语域=sys
 
 from __future__ import annotations
 
-import json
+import logging
 import os
 import re
 from collections.abc import Sequence
@@ -296,6 +296,44 @@ def _anchor_line(anchor: ReportAnchor, banned_terms: Sequence[str] = ()) -> str:
     return "\n".join([f"- {anchor.name}｜{tier}", *_wording_note(anchor), *taboo])
 
 
+LAYOUT_FEATURE_MEANINGS: dict[str, str] = {
+    "west_facing": "该空间西晒",
+    "kitchen_u_shape": "厨房为 U 形",
+    "bedroom_east_facing": "主卧东向",
+    "balcony_service": "阳台带家政/生活功能位",
+}
+"""户型特征标记闭集 → 人话（contracts ``rulebook/layout_features.json`` 的 ``meaning`` 字段逐字）。
+
+闭集在契约仓**只增不改**，这里是它在成文线的消费面：键 → 人话说法。契约仓加一条标记，这里
+同批加一行（test_writer_prompt 里有一条守卫：本机能找到契约仓时逐字比对，漂了就红）。
+
+为什么要译而不是原样下发：``layoutFeatures`` 是 map，键是内部标记名，值是解析侧的依据文字。
+此前把整个 map ``json.dumps`` 给写手，旧形态 ``{"entrance_shape": "side"}`` 被写手直译成
+「侧边户型」——**键值对不是人话，模型只能猜**。9-07 真跑册（`01MOCKFULL01M1XJD3Q54V41TX`）
+三章写了"阳台家政位"、被"老房改造/下沉卫生间"吓到业主，输入包里根本没有这些事。
+"""
+
+_log = logging.getLogger(__name__)
+
+
+def layout_feature_facts(features: dict[str, str]) -> list[str]:
+    """把画像里的户型特征译成写手能直接用的人话，**只译闭集内的键**。
+
+    闭集外的键值**不下发并记 warning**——不许猜译：猜出来的"事实"会被写进业主的报告。
+    契约说解析侧产出时键 ⊆ 闭集，这里出现越界键即上游违约，记下来去找上游，不在这儿补。
+    值（解析侧的依据文字）不进写作 prompt：写手要的是这家人的事实，不是我们为什么这么判——
+    依据可以带数、带图上的字，混进正文就是一段可照抄的裸数字。
+    """
+    facts: list[str] = []
+    for key in features:
+        meaning = LAYOUT_FEATURE_MEANINGS.get(key)
+        if meaning is None:
+            _log.warning("户型特征 %r 不在契约闭集内，不下发给写手（上游违约，勿猜译）", key)
+            continue
+        facts.append(meaning)
+    return facts
+
+
 _CARD_INDEX_RE = re.compile(r"^card\[(\d+)\]\s*")
 
 
@@ -381,11 +419,14 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     # 主张是这一稿的骨架（图 v0.2 §3 第一步产物）：一条主张一张卡，正文写"为什么"不复述主旨句。
     # 真跑立案：没有这一段时，最结构化的输入是落点清单，模型顺着它一一对应，
     # 23 条落点写成 23 张"念数字"的卡、22/22 正文与主旨句逐字相同（2026-08-29）。
+    # 规则 5.16（用户裁决 2026-09-08）：主旨句是这组的判断句、最多一个记号，数留正文逐条给，
+    # 正文不以主旨句开头复读。立案＝9-07 册人体工学第五张卡：一个标题排了六个数，正文再逐条复读。
     claims_discipline = (
         "8. 下面给了这一章**要讲的几件事**，一件事写一张卡、按给的顺序写，"
-        "不要多写、不要按落点一条一张。主旨句说这件事的结论，"
+        "不要多写、不要按落点一条一张。主旨句是这件事的**一句判断**，"
+        "**里面最多放一个记号**——这张卡其余的数全放正文，一条一句、逐条给；"
         "正文说**为什么是这个数、它管的是哪一刻、放弃了什么**——"
-        "正文与主旨句逐字相同会被打回（那等于这张卡什么都没讲）。"
+        "正文与主旨句逐字相同、或正文开头把主旨句再抄一遍，都会被打回（那等于这张卡什么都没讲）。"
         "同一张卡里几条落点**各给各的理由**，不许在它们之间编「得一起定/互相让/配着调」"
         "这种相互约束——数据里没有的联动就是没有；\n"
         if request.claims
@@ -432,7 +473,9 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "题名是内部标签，不是要你照抄的说法：引用它的数字写 {lkp-id} 占位，"
         "那件事本身用业主读得懂的话说；\n"
         "7. 没有外部背书或已过期的落点，它的**来源与取数时间由系统自动挂在这一页上**，"
-        "你不要在正文里写来源、标准号或日期——写了既是裸数字违规，也会和系统挂的那份对不上；\n"
+        "你不要在正文里写来源、标准号或日期——写了既是裸数字违规，也会和系统挂的那份对不上；"
+        "关于这家人的事实**只有「这家人的情况」那一行给的几条**，那儿没写的"
+        "（房龄、家庭成员、生活习惯、哪儿有什么设备）一个都不许写；\n"
         f"{claims_discipline}"
         f"{samples}"
         "输出：JSON 数组，每个元素 "
@@ -444,7 +487,8 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
     gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in request.gaps]
     user_parts = [
         f"领域：{request.domain}",
-        "这家人的情况（匿名）：" + json.dumps(request.profile.layout_features, ensure_ascii=False),
+        "这家人的情况（匿名）："
+        + ("；".join(layout_feature_facts(request.profile.layout_features)) or "（暂无户型信息）"),
     ]
     if request.claims:
         user_parts.append(

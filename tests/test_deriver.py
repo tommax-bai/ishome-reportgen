@@ -21,6 +21,8 @@ from reportgen_worker.models import (
     TriggeredRule,
     TriggerEvidence,
 )
+from tests.fixtures import TIERS, Tier
+from tests.fixtures import load_package as load_tier
 from tests.support import load_package
 
 PACKAGE = load_package()
@@ -449,3 +451,74 @@ def test_gap_block_forbids_writing_about_it_at_all() -> None:
         "两个方向都要堵死：推给业主、和推给我们自己的「以后」"
     )
     assert "留待现场确认" not in user, "这半句正是把活推给业主的出处"
+
+
+# ---------------------------------------------------------------------------
+# 写手看到的家庭事实全是真的（2026-09-08，立案＝9-07 真跑册三章写了输入包里没有的"阳台家政位"）
+# + 按场景归组、标题一句一个数（规则 5.16，用户裁决 2026-09-08）
+# ---------------------------------------------------------------------------
+
+INVENTED_HOUSEHOLD_FACTS = ("家政", "老房", "侧边")
+"""9-07 册里出现过、而输入包里一个字都没有的三样"家庭事实"。
+
+「家政」出自推导 prompt 自己的示范句「因为你家阳台带家政位」；「侧边」是写手把
+``{"entrance_shape": "side"}`` 直译出来的；「老房」是从"下沉卫生间"引申出来的。三条来路不同，
+共同点是**都不在输入面里**——所以判据是 prompt 文本里一个都不许有。
+"""
+
+
+def _tier_request(tier: Tier, domain: str) -> DeriveRequest:
+    package = load_tier(tier)
+    return DeriveRequest(
+        domain=domain,
+        identity=package.personas_by_domain[domain][0].identity,
+        anchors=[AnchorBrief.of(a) for a in package.domain_anchors(domain)],
+        gaps=package.domain_gaps(domain),
+        profile=package.anonymous_profile,
+        banned_terms=collect_banned_terms(domain, package),
+        triggered_rules=package.domain_triggered_rules(domain),
+        backed_predicates=backed_predicates(domain, package),
+        unbacked_predicates=unbacked_predicates(domain, package),
+        banned_term_groups=package.banned_term_groups_by_domain.get(domain, {}),
+    )
+
+
+@pytest.mark.parametrize("tier", TIERS)
+def test_derive_prompt_carries_no_household_fact_the_package_did_not_give(tier: Tier) -> None:
+    """三档考卷 × 六章：推导 prompt 里一个编出来的家庭事实都没有。
+
+    示范句是 prompt 自己写的，模型照抄示范句已实测多次（judgment_pairs 的 A/B），
+    所以示范句里的具体事实等于喂给它一条"这家人的事"——改成占位形态之后这里守着不许回来。
+    """
+    package = load_tier(tier)
+    for domain in package.domains:
+        text = "\n".join(m["content"] for m in build_derive_messages(_tier_request(tier, domain)))
+        leaked = [w for w in INVENTED_HOUSEHOLD_FACTS if w in text]
+        assert not leaked, f"{tier}/{domain} 的推导 prompt 带了输入包里没有的家庭事实：{leaked}"
+
+
+def test_derive_prompt_restricts_household_facts_to_the_input_surface() -> None:
+    """家庭事实只有两处来源（画像那一行 + 户型条目括号里的理由），其余不许出现也不许引申。"""
+    system = build_derive_messages(request_for())[0]["content"]
+    assert "关于这家人的事实只有两处来源" in system
+    assert "也不许从条目内容里引申出来" in system
+    # 示范句改成占位形态：括号里那条理由是什么就说什么，示范本身不带任何一户的事实
+    assert "因为你家〈括号里那条理由〉" in system
+
+
+def test_derive_prompt_groups_by_scene_with_one_judgment_per_group() -> None:
+    """规则 5.16：同一场景的参数归一条主张，主张是这组的判断句不是清单（用户裁决 2026-09-08）。
+
+    立案＝9-07 册人体工学第五张卡：马桶/玄关柜/衣柜/沙发/走廊六条塞一个标题，写手只能把六个数
+    排成标题、正文再逐条复读。成因就在 prompt 这一句「宁可一条主张多带几个落点」——它退场。
+    """
+    system = build_derive_messages(request_for())[0]["content"]
+    assert "宁可一条主张多带几个落点" not in system
+    assert "先把落点按场景归组" in system
+    assert "主张是这一组的**一句判断**，不是这组参数的清单" in system
+    assert "标题里最多只放得下一个数" in system
+    # 好例（厨房四条一卡）与坏例（六样互不相干的东西一卡）都在，且坏例只描述形态不给可抄的句子
+    assert "好例＝「厨房」一条，挂两排间距、水槽深、吊柜底沿、冰箱散热四条落点" in system
+    assert "坏例＝把马桶、玄关柜、衣柜、沙发、走廊这几样互不相干的东西塞进同一条" in system
+    # 归组不等于编关系：v2.5 §14.10 那条口径一字不动
+    assert "不许把同组落点写成相互约束的关系" in system

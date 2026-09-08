@@ -39,7 +39,7 @@ def test_every_tier_parses_as_a_legal_upstream_package(tier: Tier) -> None:
 
 @pytest.mark.parametrize("tier", TIERS)
 def test_three_tiers_are_one_exam_with_different_amounts_computed(tier: Tier) -> None:
-    """落点 ∪ 缺口 恒等于齐全档那 58 条：同一户人家、同一批落点。
+    """落点 ∪ 缺口 恒等于齐全档那 59 条：同一户人家、同一批落点。
 
     这条不成立三档就不可比了——"给得少时质量掉多少"会混进"换了一户人家"的影响。
     """
@@ -82,7 +82,8 @@ def test_mocked_anchors_are_marked_in_both_places() -> None:
         assert anchor.provenance.calibration == anchor.calibration
         assert anchor.provenance.annotation_required is True  # draft 进正文必挂标注
         assert anchor.presentation == "REFERENCE_ONLY"  # 合法值只有两个，draft 落这一个
-    # 真跑来的那 55 条不带标记：标记是"这条是我们造的"的意思，给真数据挂上就是假标记
+    # 真跑来的 55 条与按求值线算法派生的那条金额都不带标记：
+    # 标记是"这条是我们造的"的意思，给真数据挂上就是假标记
     for anchor in package.anchors:
         if anchor.lkp_id not in MOCK_ANCHOR_IDS:
             assert not (anchor.source or "").startswith(MOCK_MARK)
@@ -113,12 +114,12 @@ def test_every_domain_still_has_something_to_write_about(tier: Tier) -> None:
 def test_tier_shapes() -> None:
     """三档各自的落点/缺口条数——档与档的差别就是这几行。"""
     full = load_package("full")
-    assert (len(full.anchors), len(full.gaps)) == (58, 0)
+    assert (len(full.anchors), len(full.gaps)) == (59, 0)
     partial = load_package("partial-gaps")
-    assert (len(partial.anchors), len(partial.gaps)) == (55, 3)
+    assert (len(partial.anchors), len(partial.gaps)) == (56, 3)
     assert {g.lkp_id for g in partial.gaps} == MOCK_ANCHOR_IDS  # 就是真跑那次没算出来的三条
     sparse = load_package("mostly-gaps")
-    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 46)
+    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 47)
     for domain in sparse.domains:
         assert len(sparse.domain_anchors(domain)) == 2  # 每域只留两条
 
@@ -127,7 +128,7 @@ def test_each_load_returns_a_fresh_object() -> None:
     """调用方改了它不该影响下一次调用（连跑 N 次共用一个进程）。"""
     first = load_package_json("full")
     first["anchors"].clear()
-    assert len(load_package_json("full")["anchors"]) == 58
+    assert len(load_package_json("full")["anchors"]) == 59
 
 
 def test_unknown_tier_fails_loudly() -> None:
@@ -146,3 +147,30 @@ def test_production_code_never_references_the_fixture() -> None:
         text = path.read_text(encoding="utf-8")
         assert "tests.fixtures" not in text, f"{path} 引了 fixture"
         assert "upstream-package" not in text, f"{path} 引了 fixture 数据文件"
+
+
+@pytest.mark.parametrize("tier", ("full", "partial-gaps"))
+def test_cost_anchor_is_the_price_times_this_household_area(tier: Tier) -> None:
+    """金额条目（``lkp-cost-*``）进考卷，且**逐字段照求值线的形态**（2026-09-08 立案：9-07 册造价章
+    一个「元」都没有——考卷只有单价条目，没有求值线派生的金额条目）。
+
+    求值线 ``RulebookEvaluator.projectWorkItemCost``：``min/max = round(单价两端 × 建筑面积)``，
+    两端各自乘不交叉；``unit`` 硬编 ``元``；``name`` = 单价资产名 + ``合计``；推导原文进顶层
+    ``source``、``provenance.source`` 仍是单价的外部出处（两处**不同值**，照它）。
+    这里把关系再算一遍，考卷上的金额与单价、面积对不上就红——它不是 mock，是派生。
+    """
+    package = load_package(tier)
+    by_id = {a.lkp_id: a for a in package.anchors}
+    price, cost = by_id["lkp-price-hydro-labor-sqm"], by_id["lkp-cost-hydro-labor-sqm"]
+    area = package.anonymous_profile.building_area_sqm
+    assert area is not None and isinstance(price.value, dict) and isinstance(cost.value, dict)
+    assert cost.value == {
+        "min": round(price.value["min"] * area),
+        "max": round(price.value["max"] * area),
+    }
+    assert cost.unit == "元" and cost.value_kind == "range"
+    assert cost.name == price.name + "合计"
+    assert cost.basis_tag == price.basis_tag and cost.calibration == price.calibration
+    assert cost.provenance is not None and price.provenance is not None
+    assert cost.provenance.source == price.provenance.source  # 依据标注印的是单价的出处
+    assert cost.source is not None and cost.source.startswith("求值线按「单价 × 量」算出")
