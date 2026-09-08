@@ -153,7 +153,8 @@ def test_production_code_never_references_the_fixture() -> None:
 @pytest.mark.parametrize(
     ("price_id", "cost_id", "round_to"),
     [
-        # 水电人工（backend ac7cbd3，2026-09-08）：单价资产同批加了 cost_round_to: 100，真跑给 6600–7500
+        # 水电人工（backend ac7cbd3，2026-09-08）：单价资产同批加了 cost_round_to: 100，
+        # 真跑给 6600–7500
         ("lkp-price-hydro-labor-sqm", "lkp-cost-hydro-labor-sqm", 100),
         # 全屋硬装（backend e48d8ed，2026-09-08）：种子声明 cost_round_to: 100，金额两端各自到百元
         ("lkp-price-hardfit-total-sqm", "lkp-cost-hardfit-total-sqm", 100),
@@ -166,8 +167,9 @@ def test_cost_anchor_is_the_price_times_this_household_area(
     一个「元」都没有——考卷只有单价条目，没有求值线派生的金额条目）。
 
     求值线 ``RulebookEvaluator.projectWorkItemCost``：``min/max = round(单价两端 × 建筑面积)``，
-    两端各自乘不交叉、再按单价资产声明的 ``cost_round_to`` 取整（没声明就不取整）；``unit`` 硬编 ``元``；
-    ``name`` = 单价资产名 + ``合计``；推导原文进顶层 ``source``、``provenance.source`` 仍是单价的外部出处
+    两端各自乘不交叉、再按单价资产声明的 ``cost_round_to`` 取整（没声明就不取整）；
+    ``unit`` 硬编 ``元``；``name`` = 单价资产名 + ``合计``；推导原文进顶层 ``source``、
+    ``provenance.source`` 仍是单价的外部出处
     （两处**不同值**，照它）。
     这里把关系再算一遍，考卷上的金额与单价、面积对不上就红——它不是 mock，是派生。
     """

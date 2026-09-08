@@ -1296,7 +1296,8 @@ def _cost_anchor_unused_violations(
             Violation(
                 check="gate-cost-anchor-unused",
                 detail=(
-                    f"算出来的钱没进正文：{'、'.join(missing)} → 这几条是求值线按这家的量算出的金额，"
+                    f"算出来的钱没进正文：{'、'.join(missing)} → "
+                    "这几条是求值线按这家的量算出的金额，"
                     "至少要在一张卡里引用它的记号，让业主看到「大概要花多少」"
                 ),
             )
