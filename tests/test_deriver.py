@@ -516,7 +516,8 @@ def test_derive_prompt_groups_by_scene_with_one_judgment_per_group() -> None:
     assert "宁可一条主张多带几个落点" not in system
     assert "先把落点按场景归组" in system
     assert "主张是这一组的**一句判断**，不是这组参数的清单" in system
-    assert "标题里最多只放得下一个数" in system
+    assert "你这一步照旧一个数都不写" in system
+    assert "最多只放得下一个数" not in system
     # 好例（厨房四条一卡）与坏例（六样互不相干的东西一卡）都在，且坏例只描述形态不给可抄的句子
     assert "好例＝「厨房」一条，挂两排间距、水槽深、吊柜底沿、冰箱散热四条落点" in system
     assert "坏例＝把马桶、玄关柜、衣柜、沙发、走廊这几样互不相干的东西塞进同一条" in system
