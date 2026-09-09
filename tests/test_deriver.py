@@ -7,10 +7,12 @@ import json
 
 import pytest
 
+from reportgen_worker import deriver
 from reportgen_worker.deriver import (
     COST_CLAIM_TEXT,
     DeriveRequest,
     DeriverOutputError,
+    LlmNarrativeDeriver,
     build_derive_messages,
     parse_claims,
 )
@@ -24,7 +26,7 @@ from reportgen_worker.models import (
 )
 from tests.fixtures import TIERS, Tier
 from tests.fixtures import load_package as load_tier
-from tests.support import load_package
+from tests.support import capture_gateway_calls, load_package
 
 PACKAGE = load_package()
 DOMAIN = "ergonomics"
@@ -682,3 +684,37 @@ def test_budget_unclaimed_cost_ids_merge_into_the_first_claim() -> None:
         ' "lkp-cost-hardfit-by-grade"]',
     )
     assert parse_claims(raw_ok, known, must_claim_ids=must, domain="budget")[0].anchors == must
+
+
+async def test_the_call_says_which_ai_judgment_and_which_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """请求体里带着"这是哪一处 AI 判断、属于哪次运行"——网关只看得见模型名，分不出这两件。
+
+    推导与写作今天同底模，同一个模型名底下混着三处判断；一册六章、每章还有重写轮，
+    不带运行编号就串不回同一册。
+    """
+    bodies = capture_gateway_calls(
+        monkeypatch, deriver, '[{"claim": "把厨房这块地方的取舍讲明白。", "anchors": []}]'
+    )
+
+    request = request_for().model_copy(update={"run_ref": "report-compose-r7:ergonomics:attempt0"})
+    assert await LlmNarrativeDeriver().derive(request)
+
+    assert bodies[0]["metadata"] == {
+        "call_point": "report-derive",
+        "run_ref": "report-compose-r7:ergonomics:attempt0",
+    }
+
+
+async def test_the_call_point_is_named_even_without_a_run_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """拿不到运行编号（不在 Temporal 上下文里）：判断名照报，编号如实写 None——不编一个。"""
+    bodies = capture_gateway_calls(
+        monkeypatch, deriver, '[{"claim": "把厨房这块地方的取舍讲明白。", "anchors": []}]'
+    )
+
+    await LlmNarrativeDeriver().derive(request_for())
+
+    assert bodies[0]["metadata"] == {"call_point": "report-derive", "run_ref": None}

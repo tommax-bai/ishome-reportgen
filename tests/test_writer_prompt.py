@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from reportgen_worker import writer
 from reportgen_worker.gate import (
     backed_predicates,
     collect_banned_terms,
@@ -30,6 +31,7 @@ from reportgen_worker.models import (
 )
 from reportgen_worker.writer import (
     LAYOUT_FEATURE_MEANINGS,
+    LlmCardWriter,
     WriterRequest,
     build_messages,
     judgment_pairs,
@@ -37,7 +39,7 @@ from reportgen_worker.writer import (
 )
 from tests.fixtures import TIERS, Tier
 from tests.fixtures import load_package as load_tier
-from tests.support import PACKAGE_JSON, load_package
+from tests.support import PACKAGE_JSON, capture_gateway_calls, load_package
 
 PACKAGE = load_package()
 DOMAIN = "ergonomics"
@@ -648,3 +650,38 @@ def test_budget_writer_puts_the_total_in_the_thesis_and_keeps_shares_off_the_wai
 
     other = build_messages(_tier_request("full", "ergonomics"))[0]["content"]
     assert "一个记号放总价" not in other and "等平面" not in other
+
+
+async def test_the_call_says_which_ai_judgment_and_which_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """请求体里带着"这是哪一处 AI 判断、属于哪次运行"——网关只看得见模型名，分不出这两件。
+
+    重写轮各是一次调用：编号里的轮次那一段就是用来把它们分开的，缺了它同一章几轮长得一样。
+    """
+    bodies = capture_gateway_calls(monkeypatch, writer, "[]")
+
+    first = request_for().model_copy(
+        update={"attempt": 0, "run_ref": "report-compose-r7:ergonomics:attempt0"}
+    )
+    rewrite = request_for().model_copy(
+        update={"attempt": 1, "run_ref": "report-compose-r7:ergonomics:attempt1"}
+    )
+    await LlmCardWriter().write(first)
+    await LlmCardWriter().write(rewrite)
+
+    assert [b["metadata"] for b in bodies] == [
+        {"call_point": "report-compose", "run_ref": "report-compose-r7:ergonomics:attempt0"},
+        {"call_point": "report-compose", "run_ref": "report-compose-r7:ergonomics:attempt1"},
+    ]
+
+
+async def test_the_call_point_is_named_even_without_a_run_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """拿不到运行编号（不在 Temporal 上下文里）：判断名照报，编号如实写 None——不编一个。"""
+    bodies = capture_gateway_calls(monkeypatch, writer, "[]")
+
+    await LlmCardWriter().write(request_for())
+
+    assert bodies[0]["metadata"] == {"call_point": "report-compose", "run_ref": None}

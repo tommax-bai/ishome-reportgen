@@ -8,8 +8,11 @@ import json
 
 import pytest
 
+from reportgen_worker import judge
 from reportgen_worker.judge import (
+    JUDGE_BATCH_SIZE,
     JudgeRequest,
+    LlmJudge,
     blocking_check_ids,
     build_judge_messages,
     judge_checks,
@@ -17,7 +20,7 @@ from reportgen_worker.judge import (
     parse_observations,
 )
 from reportgen_worker.models import Card, JudgeObservation, ReportDataPackage
-from tests.support import PACKAGE_JSON, load_package
+from tests.support import PACKAGE_JSON, capture_gateway_calls, load_package
 
 PACKAGE = load_package()
 FABRICATED_CARD = Card(
@@ -235,3 +238,42 @@ def test_observation_has_no_place_for_a_rewrite(field: str) -> None:
                 field: "改成两个人",
             }
         )
+
+
+async def test_the_call_says_which_ai_judgment_and_which_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """请求体里带着"这是哪一处 AI 判断、属于哪次运行"——网关只看得见模型名，分不出这两件。
+
+    判官与写手今天同底模（规则 4.17 已知风险），同一个模型名底下混着三处判断；
+    而"判官问了几次"恰恰是门禁二要看的数，分不开就数不出来。
+    """
+    bodies = capture_gateway_calls(monkeypatch, judge, "[]")
+
+    request = make_request().model_copy(update={"run_ref": "report-compose-r7:ergonomics:attempt0"})
+    await LlmJudge().review(request)
+
+    assert bodies[0]["metadata"] == {
+        "call_point": "report-judge",
+        "run_ref": "report-compose-r7:ergonomics:attempt0",
+    }
+
+
+async def test_each_review_batch_gets_its_own_run_ref(monkeypatch: pytest.MonkeyPatch) -> None:
+    """一稿分几批送审就是几次调用：编号带上批次才分得开，没有编号时仍是 None。"""
+    bodies = capture_gateway_calls(monkeypatch, judge, "[]")
+    cards = [FABRICATED_CARD] * (JUDGE_BATCH_SIZE + 1)
+
+    await observe(
+        LlmJudge(),
+        make_request(cards).model_copy(update={"run_ref": "report-compose-r7:ergonomics:attempt0"}),
+    )
+    await observe(LlmJudge(), make_request(cards))
+
+    assert [b["metadata"]["run_ref"] for b in bodies] == [
+        "report-compose-r7:ergonomics:attempt0:batch1",
+        "report-compose-r7:ergonomics:attempt0:batch2",
+        None,
+        None,
+    ]
+    assert {b["metadata"]["call_point"] for b in bodies} == {"report-judge"}

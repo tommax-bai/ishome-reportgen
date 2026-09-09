@@ -47,6 +47,17 @@ from reportgen_worker.models import (
 )
 
 JUDGE_LOGICAL_MODEL = "report-unit-judge.default"
+
+JUDGE_CALL_POINT = "report-judge"
+"""这一处 AI 判断的名字，随每次调用报给网关（网关按它把调用记到正确的名下）。
+
+网关只看得见模型名，分不出"判官"与"写手"——两者今天同底模（已知风险，规则 4.17），同一个模型名
+底下混着三处判断，而"判官判了多少次、命中什么"恰恰是门禁二要看的数。名字的真源是判官台那张
+基本信息表，此处照抄不改。
+
+三个类各写一份而不抽公共件：判官与写作器共享任何东西都是同源漂移的入口（import-linter 锁死
+互不可见），这一行的重复是那条分界的代价，不是疏忽。"""
+
 _OBSERVATIONS_ADAPTER: TypeAdapter[list[JudgeObservation]] = TypeAdapter(list[JudgeObservation])
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
 QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
@@ -84,6 +95,15 @@ class JudgeRequest(BaseModel):
     checks: list[CheckAsset]
     profile: EvaluationProfile
     anchors: list[ReportAnchor]
+    run_ref: str | None = None
+    """这次运行的编号，只随调用报给网关做调用记录，**不进 prompt、不参与判**。
+
+    整册一个编号、六章各自成章、每章还有重写轮，判官还要再分批送审——不带编号网关那边就拼不回
+    "这几十次调用是同一册"。取现成的：整册的运行标识 + 章名 + 第几轮，批次那一段由
+    :func:`observe` 在分批时补上。取不到就是 None，不编。
+
+    它不是业主身份：``extra=forbid`` 守的是"任何用户/项目标识字段直接解析失败"，运行编号说的是
+    "这是哪一次跑"，与这一家人是谁无关，生成侧照旧不知道用户是谁。"""
 
 
 class Judge(Protocol):
@@ -246,6 +266,12 @@ class LlmJudge:
                     "model": JUDGE_LOGICAL_MODEL,
                     "messages": build_judge_messages(request),
                     "temperature": 0,
+                    # 这次调用记在谁名下（网关的调用记录按这两样归口，见 JUDGE_CALL_POINT）。
+                    # LiteLLM 自己消费 metadata，不透传给厂商。
+                    "metadata": {
+                        "call_point": JUDGE_CALL_POINT,
+                        "run_ref": request.run_ref,
+                    },
                 },
             )
             response.raise_for_status()
@@ -282,7 +308,12 @@ async def observe(
     failed = 0
     for index, batch in enumerate(batches):
         try:
-            observations += await judge.review(request.model_copy(update={"cards": batch}))
+            # 批次进运行编号：一稿分几批送审就是几次调用，不带批次号在网关的调用记录里
+            # 长得一模一样。没有编号（拿不到运行标识）就照旧是 None，不为凑一个编号现造。
+            batch_ref = None if request.run_ref is None else f"{request.run_ref}:batch{index + 1}"
+            observations += await judge.review(
+                request.model_copy(update={"cards": batch, "run_ref": batch_ref})
+            )
         except Exception:
             failed += 1
             logger.warning(

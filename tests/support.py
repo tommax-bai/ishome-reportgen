@@ -1,10 +1,51 @@
-"""测试夹具：报告数据包（与 project-svc Jackson 序列化 camelCase 同形——契约对齐样本）。"""
+"""测试夹具：报告数据包（与 project-svc Jackson 序列化 camelCase 同形——契约对齐样本），
+外加一个记下"发出去的请求体长什么样"的假网关。"""
 
 from __future__ import annotations
 
+from types import ModuleType
 from typing import Any
 
+import httpx
+import pytest
+
 from reportgen_worker.models import ReportDataPackage
+
+
+def capture_gateway_calls(
+    monkeypatch: pytest.MonkeyPatch, module: ModuleType, reply: str
+) -> list[dict[str, Any]]:
+    """把某个模块发出的网关调用截下来，返回"请求体"清单（回一段预设的模型回复）。
+
+    推导 / 写作 / 判官三个类各自 ``httpx.AsyncClient(...)`` 建连——import-linter 锁死三者互不
+    可见，没有共享客户端可注入，故桩件按 ``httpx.AsyncClient`` 这个名字打，每条测试自己指名
+    要验哪个模块。
+    """
+    bodies: list[dict[str, Any]] = []
+
+    class _Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *args: Any) -> bool:
+            return False
+
+        async def post(
+            self, url: str, headers: dict[str, str] | None = None, json: Any = None
+        ) -> httpx.Response:
+            bodies.append(json)
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": reply}}]},
+                request=httpx.Request("POST", url),
+            )
+
+    monkeypatch.setattr(module.httpx, "AsyncClient", _Client)
+    return bodies
+
 
 PACKAGE_JSON: dict[str, Any] = {
     "entitlement": "PAID",

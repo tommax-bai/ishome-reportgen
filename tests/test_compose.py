@@ -7,6 +7,7 @@ import json
 import pathlib
 
 import pytest
+from temporalio import activity as temporal_activity
 
 from reportgen_worker import activities
 from reportgen_worker.deriver import DeriveRequest, DeriverOutputError, NarrativeDeriver
@@ -602,3 +603,53 @@ async def test_derivation_sees_item_names_of_the_domain_anchors() -> None:
     brief = deriver.seen_requests[0].anchors[0]
     assert brief.items == ["general", "reading"]
     assert "value" not in brief.model_dump()
+
+
+class _FakeActivityInfo:
+    """Temporal 的 activity 上下文桩件：一册报告一个 workflow id，编排侧由 report_id 推得。"""
+
+    activity_type = "report-unit-compose"
+    workflow_id = "report-compose-r7"
+    workflow_run_id = "run-1"
+    attempt = 1
+
+
+async def test_the_run_ref_comes_from_the_workflow_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """运行编号用现成的 Temporal workflow id 拼上章名与轮次，不为调用记录新造标识。
+
+    一册六章、每章还有重写轮，三处判断都要认得出自己属于哪一章的哪一轮——只有这样，
+    网关那边几十条调用记录才拼得回同一册。
+    """
+    monkeypatch.setattr(temporal_activity, "in_activity", lambda: True)
+    monkeypatch.setattr(temporal_activity, "info", lambda: _FakeActivityInfo())
+
+    writer = ScriptedWriter([[BAD_CARD], [GOOD_CARD]])
+    deriver = ScriptedDeriver()
+    judge = ScriptedJudge()
+    result = await compose(writer, deriver=deriver, judge=judge)
+
+    assert result.verdict == "ok"
+    # 写作：重写两轮各一个编号，轮次那一段把它们分开
+    assert [r.run_ref for r in writer.seen_requests] == [
+        "report-compose-r7:ergonomics:attempt0",
+        "report-compose-r7:ergonomics:attempt1",
+    ]
+    # 推导每单元只跑一次
+    assert [r.run_ref for r in deriver.seen_requests] == ["report-compose-r7:ergonomics:attempt0"]
+    # 判官在规则层放行之后才问，故是第二轮那个编号；分批送审再各自带上批次号
+    assert [r.run_ref for r in judge.seen_requests] == [
+        "report-compose-r7:ergonomics:attempt1:batch1"
+    ]
+
+
+async def test_no_workflow_context_means_no_run_ref() -> None:
+    """不在 Temporal 上下文里（单测直接调实现件）就没有编号——如实写 None，不编一个。"""
+    writer = ScriptedWriter([[GOOD_CARD]])
+    deriver = ScriptedDeriver()
+    judge = ScriptedJudge()
+
+    await compose(writer, deriver=deriver, judge=judge)
+
+    assert writer.seen_requests[0].run_ref is None
+    assert deriver.seen_requests[0].run_ref is None
+    assert judge.seen_requests[0].run_ref is None

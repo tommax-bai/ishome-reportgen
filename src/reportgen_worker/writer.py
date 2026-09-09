@@ -60,6 +60,17 @@ from reportgen_worker.models import (
 )
 
 COMPOSE_LOGICAL_MODEL = "report-unit-compose.default"
+
+COMPOSE_CALL_POINT = "report-compose"
+"""这一处 AI 判断的名字，随每次调用报给网关（网关按它把调用记到正确的名下）。
+
+网关只看得见模型名，分不出"写报告卡片"与"定这一章讲什么"——两步今天恰好同底模，同一个模型名
+底下混着三处判断。名字的真源是判官台那张基本信息表，此处照抄不改；与逻辑模型名同域不同物：
+模型名说的是"调哪个模型"、换模型就变，这个说的是这一步本身。
+
+三个类各写一份而不抽公共件：import-linter 锁死推导/写作/判官互不可见，这一行的重复是那条
+分界的代价，不是疏忽。"""
+
 _CARDS_ADAPTER: TypeAdapter[list[Card]] = TypeAdapter(list[Card])
 _JSON_BLOCK_RE = re.compile(r"\[.*\]", re.DOTALL)
 
@@ -101,6 +112,15 @@ class WriterRequest(BaseModel):
     换成什么词由写手自己判断——判据只说这个词不行，不给替代说法（判据不写字，替代说法固定进
     词表即人预设模板）。"""
     attempt: int = 0
+    run_ref: str | None = None
+    """这次运行的编号，只随调用报给网关做调用记录，**不进 prompt、不参与写作**。
+
+    整册一个编号、六章各自成章、每章还有重写轮，不带编号网关那边就拼不回"这几十次调用是同一册"。
+    取现成的：整册的运行标识（Temporal workflow id）+ 章名 + 第几轮（``attempt``），见
+    `activities`——重写轮各是一次调用，编号里那一段就是用来把它们分开的。取不到就是 None，不编。
+
+    它不是业主身份：``extra=forbid`` 守的是"任何用户/项目标识字段直接解析失败"，运行编号说的是
+    "这是哪一次跑"，与这一家人是谁无关，生成侧照旧不知道用户是谁。"""
 
 
 class WriterOutputError(Exception):
@@ -599,6 +619,12 @@ class LlmCardWriter:
                     "model": COMPOSE_LOGICAL_MODEL,
                     "messages": build_messages(request),
                     "temperature": 0,
+                    # 这次调用记在谁名下（网关的调用记录按这两样归口，见 COMPOSE_CALL_POINT）。
+                    # LiteLLM 自己消费 metadata，不透传给厂商。
+                    "metadata": {
+                        "call_point": COMPOSE_CALL_POINT,
+                        "run_ref": request.run_ref,
+                    },
                 },
             )
             response.raise_for_status()

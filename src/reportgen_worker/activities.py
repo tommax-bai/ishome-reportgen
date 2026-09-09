@@ -97,6 +97,24 @@ JUDGE_LEDGER_ENV = "REPORTGEN_JUDGE_LEDGER"
 THESIS_EXCERPT_CHARS = 20
 
 
+def run_ref_of(domain: str, attempt: int) -> str | None:
+    """这次运行的编号，随每次调用报给网关（网关按它把一册报告的几十次调用串回一起）。
+
+    **用现成的标识，不新造**：一册报告就是一次 Temporal workflow（编排侧的 workflow id 由
+    report_id 推得），它就是"整册的运行标识"；后面拼章名与第几轮——一册六章、每章还有重写轮，
+    不拼这两段，网关那边看到的就是几十次长得一模一样的调用。
+
+    不在 activity 上下文里（单测直接调实现件）就**回 None**——拿不到就说没有，不编一个看着像
+    编号的东西：网关那边宁可记成"这次运行不明"，也不能记成一个查无此项的编号。
+    """
+    if not activity.in_activity():
+        return None
+    workflow_id = activity.info().workflow_id
+    if not workflow_id:
+        return None
+    return f"{workflow_id}:{domain}:attempt{attempt}"
+
+
 def append_judge_ledger(
     domain: str,
     run: JudgeRun | None,
@@ -260,6 +278,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                         feedback=derive_feedback,
                         previous_claims=previous_claims,
                         earlier_feedback=list(derive_earlier),
+                        run_ref=run_ref_of(domain, attempt),
                     )
                 )
             except DeriverOutputError as e:
@@ -287,6 +306,7 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
             previous_cards=previous_cards,
             earlier_feedback=list(earlier_feedback),  # 快照：本轮的 feedback 稍后才进历史
             attempt=attempt,
+            run_ref=run_ref_of(domain, attempt),
         )
         if feedback:
             earlier_feedback.append(feedback)
@@ -317,6 +337,8 @@ async def compose_report_unit(request: UnitComposeRequest) -> ActivityResult:
                     checks=checks,
                     profile=package.anonymous_profile,
                     anchors=anchors,
+                    # 判官还要再分批，批次那一段由 observe 在分批时补上
+                    run_ref=run_ref_of(domain, attempt),
                 ),
             )
             append_judge_ledger(domain, judge_run, package.releases, observations, cards)
