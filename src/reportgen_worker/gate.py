@@ -145,13 +145,18 @@ def waiting_cost_gaps(
     """把缺口分成两堆：**等平面的金额**（金额缺、单价在）与其余。
 
     前者是造价章要讲的第二件事（规则 5.15 v2.13：量缺的分项占比为空，坦白"等平面出来按量算"），
-    后者退回通用口径（没有值就不写，规则 4.18）。判据是结构的：缺口 id 是 ``lkp-cost-`` 且对应的
+    后者退回通用口径（没有值就不写，规则 4.18）。判据是结构的：缺口 id 是 ``lkp-cost-`` 或
+    ``lkp-share-``（求值线对"声明了占比但量还没有"的分项记的是占比缺口，backend 533aa06）且对应的
     ``lkp-price-`` 条目在本域落点里——不靠猜"这条缺口像不像金额"。
     """
     waiting: list[tuple[GapRecord, str]] = []
     rest: list[GapRecord] = []
     for gap in gaps:
-        price_id = price_id_of_cost(gap.lkp_id) if gap.lkp_id.startswith(COST_ID_PREFIX) else ""
+        price_id = ""
+        for prefix in (COST_ID_PREFIX, SHARE_ID_PREFIX):
+            if gap.lkp_id.startswith(prefix):
+                price_id = PRICE_ID_PREFIX + gap.lkp_id[len(prefix) :]
+                break
         if price_id and price_id in anchor_ids:
             waiting.append((gap, price_id))
         else:

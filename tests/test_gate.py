@@ -1301,3 +1301,37 @@ def test_cost_anchor_left_out_of_budget_chapter_is_rejected() -> None:
         for v in run_unit_gate([card_ok], "budget", package)
         if v.check == "gate-cost-anchor-unused"
     ]
+
+
+def test_share_gap_pairs_with_its_price_anchor_as_waiting_for_plan() -> None:
+    """求值线对"声明了占比但量还没有"的分项记的是 lkp-share-* 缺口（backend 533aa06）——
+    它和金额缺口一样属于"等平面"，配对到同名单价条目。"""
+    from reportgen_worker.gate import waiting_cost_gaps
+    from reportgen_worker.models import GapRecord
+
+    gaps = [
+        GapRecord(
+            lkp_id="lkp-share-demolition",
+            basis_tag="budget@v12",
+            reason="missing_input",
+            detail="等平面出来按量算",
+        ),
+        GapRecord(
+            lkp_id="lkp-cost-wall-paint",
+            basis_tag="budget@v12",
+            reason="missing_input",
+            detail="等平面出来按量算",
+        ),
+        GapRecord(
+            lkp_id="lkp-share-nowhere",
+            basis_tag="budget@v12",
+            reason="missing_input",
+            detail="没有单价",
+        ),
+    ]
+    waiting, rest = waiting_cost_gaps(gaps, {"lkp-price-demolition", "lkp-price-wall-paint"})
+    assert [(g.lkp_id, p) for g, p in waiting] == [
+        ("lkp-share-demolition", "lkp-price-demolition"),
+        ("lkp-cost-wall-paint", "lkp-price-wall-paint"),
+    ]
+    assert [g.lkp_id for g in rest] == ["lkp-share-nowhere"]
