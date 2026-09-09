@@ -134,13 +134,13 @@ def test_tier_shapes() -> None:
     量缺的分项占比为空），不是考卷造的。
     """
     full = load_package("full")
-    assert (len(full.anchors), len(full.gaps)) == (60, 4)
+    assert (len(full.anchors), len(full.gaps)) == (59, 4)
     assert {g.lkp_id for g in full.gaps} == SHARE_GAP_IDS
     for gap in full.gaps:
         assert gap.reason == "missing_input"
         assert gap.detail is not None and gap.detail.startswith("等平面出来按量算")
     partial = load_package("partial-gaps")
-    assert (len(partial.anchors), len(partial.gaps)) == (58, 6)
+    assert (len(partial.anchors), len(partial.gaps)) == (57, 6)
     # 齐全档那 4 条 + 真跑那次没算出来、至今仍在下发的 2 条
     assert {g.lkp_id for g in partial.gaps} == SHARE_GAP_IDS | MOCK_ANCHOR_IDS
     sparse = load_package("mostly-gaps")
@@ -153,7 +153,7 @@ def test_each_load_returns_a_fresh_object() -> None:
     """调用方改了它不该影响下一次调用（连跑 N 次共用一个进程）。"""
     first = load_package_json("full")
     first["anchors"].clear()
-    assert len(load_package_json("full")["anchors"]) == 60
+    assert len(load_package_json("full")["anchors"]) == 59
 
 
 def test_unknown_tier_fails_loudly() -> None:

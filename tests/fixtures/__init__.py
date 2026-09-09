@@ -28,13 +28,13 @@ release 一变、种子一改，卷子就换了——"整册四跑一成"这种�
 
 ## 三档分别是什么
 
-同一户人家、同一批 64 条落点（60 条有值 + 4 条求值线自己记的缺口），**只差上游算出来了几条**
+同一户人家、同一批 63 条落点（59 条有值 + 4 条求值线自己记的缺口），**只差上游算出来了几条**
 ——所以三档之间可比：
 
-- ``full`` **齐全档**：60 条有值 + 4 条缺口。上游把该给的量都给全了；那 4 条缺口**不是考卷造的**，
+- ``full`` **齐全档**：59 条有值 + 4 条缺口。上游把该给的量都给全了；那 4 条缺口**不是考卷造的**，
   是求值线的真实行为（backend 533aa06，2026-09-09）：声明了 ``share_of`` 但量还没有的四个分项
   （定制柜/拆除/墙面涂刷/水电点位）记 gap「等平面出来按量算」——占比由算得不由搜得，量缺就是缺。
-- ``partial-gaps`` **部分缺档**：58 条有值 + 6 条缺口（上面 4 条 + 2026-08-31 那次六章整册真跑
+- ``partial-gaps`` **部分缺档**：57 条有值 + 6 条缺口（上面 4 条 + 2026-08-31 那次六章整册真跑
   没算出来的 2 条，后者的 ``reason``/``detail`` 逐字来自那次真跑，只补了当时还没有的
   ``basisTag``）。
 - ``mostly-gaps`` **大量缺档**：12 条有值（每域 2 条）+ 52 条缺口。测"上游给得很少时
@@ -80,7 +80,7 @@ MOCK_MARK = "【MOCK fixture，禁止入库】"
 _FULL_PACKAGE_PATH = Path(__file__).parent / "upstream-package-full.json"
 
 MOCK_ANCHOR_IDS: frozenset[str] = frozenset({"lkp-rug-size-rule", "lkp-storage-total-meters"})
-"""齐全档里**我们造出来的**那两条落点（其余 58 条：53 条取自真跑，值是求值线自己算的；
+"""齐全档里**我们造出来的**那两条落点（其余 57 条：52 条取自真跑，值是求值线自己算的；
 1 条单价 ``lkp-price-hardfit-total-sqm`` 照业务侧种子 ``attr-price-hardfit-total-sqm``
 （backend e48d8ed）按考卷城市档取值；
 2 条金额 ``lkp-cost-hydro-labor-sqm`` / ``lkp-cost-hardfit-total-sqm`` 按求值线
@@ -200,3 +200,4 @@ def _withhold(
     package["anchors"] = kept
     package["gaps"] = gaps
     return package
+# 2026-09-09：`lkp-budget-confidence-width`（置信到区间宽度的内部映射）退役不下发——真跑册把它印给了业主。

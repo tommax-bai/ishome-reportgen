@@ -155,31 +155,6 @@
       "presentation": "REFERENCE_ONLY"
     },
     {
-      "lkpId": "lkp-budget-confidence-width",
-      "name": "置信到区间宽度的映射",
-      "numberClass": "analysis",
-      "unit": "±比例",
-      "valueKind": "tier",
-      "value": {
-        "low": 0.5,
-        "high": 0.15,
-        "medium": 0.3
-      },
-      "referencePlane": null,
-      "basisTag": "budget@v12",
-      "source": null,
-      "calibration": "draft",
-      "degraded": true,
-      "provenance": {
-        "source": null,
-        "effectiveFrom": null,
-        "effectiveTo": null,
-        "calibration": "draft",
-        "annotationRequired": true
-      },
-      "presentation": "REFERENCE_ONLY"
-    },
-    {
       "lkpId": "lkp-cct-living",
       "name": "起居与卧室色温",
       "numberClass": "selection",
