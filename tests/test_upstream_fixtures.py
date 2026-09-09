@@ -39,11 +39,12 @@ def test_every_tier_parses_as_a_legal_upstream_package(tier: Tier) -> None:
 
 @pytest.mark.parametrize("tier", TIERS)
 def test_three_tiers_are_one_exam_with_different_amounts_computed(tier: Tier) -> None:
-    """落点 ∪ 缺口 恒等于齐全档那 61 条：同一户人家、同一批落点。
+    """落点 ∪ 缺口 恒等于齐全档那 64 条（60 有值 + 4 求值线自记的缺口）：同一户人家、同一批落点。
 
     这条不成立三档就不可比了——"给得少时质量掉多少"会混进"换了一户人家"的影响。
     """
-    full_ids = {a.lkp_id for a in load_package("full").anchors}
+    full = load_package("full")
+    full_ids = {a.lkp_id for a in full.anchors} | {g.lkp_id for g in full.gaps}
     package = load_package(tier)
     assert {a.lkp_id for a in package.anchors} | {g.lkp_id for g in package.gaps} == full_ids
 
@@ -55,7 +56,9 @@ def test_every_gap_slices_back_to_its_own_domain(tier: Tier) -> None:
     立案在 2026-08-31：缺口原先没有域，整册缺口被原样发给每一章，于是各章为**别的章的缺口**
     写坦白卡，storage 的禁词还被带进了 softdeco 的正文。
     """
-    domain_of = {a.lkp_id: a.basis_tag for a in load_package("full").anchors}
+    full = load_package("full")
+    domain_of = {a.lkp_id: a.basis_tag for a in full.anchors}
+    domain_of |= {g.lkp_id: g.basis_tag for g in full.gaps}
     package = load_package(tier)
     for gap in package.gaps:
         assert gap.basis_tag == domain_of[gap.lkp_id]
@@ -82,7 +85,8 @@ def test_mocked_anchors_are_marked_in_both_places() -> None:
         assert anchor.provenance.calibration == anchor.calibration
         assert anchor.provenance.annotation_required is True  # draft 进正文必挂标注
         assert anchor.presentation == "REFERENCE_ONLY"  # 合法值只有两个，draft 落这一个
-    # 真跑来的 55 条、照种子取值的硬装单价与按求值线算法派生的两条金额都不带标记：
+    # 真跑来的 53 条、照种子取值的硬装单价、按求值线算法派生的四条（两条金额、占比、三档）
+    # 都不带标记：
     # 标记是"这条是我们造的"的意思，给真数据挂上就是假标记
     for anchor in package.anchors:
         if anchor.lkp_id not in MOCK_ANCHOR_IDS:
@@ -111,15 +115,36 @@ def test_every_domain_still_has_something_to_write_about(tier: Tier) -> None:
         assert package.domain_anchors(domain), f"{domain} 在 {tier} 档下一条落点都不剩"
 
 
+SHARE_GAP_IDS: frozenset[str] = frozenset(
+    {
+        "lkp-share-custom-cabinet",
+        "lkp-share-demolition",
+        "lkp-share-electrical-point",
+        "lkp-share-wall-paint",
+    }
+)
+"""齐全档自带的四条缺口：声明了 ``share_of`` 但量还没有的分项，求值线记 gap 不填
+（backend 533aa06）。"""
+
+
 def test_tier_shapes() -> None:
-    """三档各自的落点/缺口条数——档与档的差别就是这几行。"""
+    """三档各自的落点/缺口条数——档与档的差别就是这几行。
+
+    齐全档自 2026-09-09 起不再是"0 缺口"：那 4 条是求值线的真实输出（占比由算得不由搜得，
+    量缺的分项占比为空），不是考卷造的。
+    """
     full = load_package("full")
-    assert (len(full.anchors), len(full.gaps)) == (61, 0)
+    assert (len(full.anchors), len(full.gaps)) == (60, 4)
+    assert {g.lkp_id for g in full.gaps} == SHARE_GAP_IDS
+    for gap in full.gaps:
+        assert gap.reason == "missing_input"
+        assert gap.detail is not None and gap.detail.startswith("等平面出来按量算")
     partial = load_package("partial-gaps")
-    assert (len(partial.anchors), len(partial.gaps)) == (58, 3)
-    assert {g.lkp_id for g in partial.gaps} == MOCK_ANCHOR_IDS  # 就是真跑那次没算出来的三条
+    assert (len(partial.anchors), len(partial.gaps)) == (58, 6)
+    # 齐全档那 4 条 + 真跑那次没算出来、至今仍在下发的 2 条
+    assert {g.lkp_id for g in partial.gaps} == SHARE_GAP_IDS | MOCK_ANCHOR_IDS
     sparse = load_package("mostly-gaps")
-    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 49)
+    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 52)
     for domain in sparse.domains:
         assert len(sparse.domain_anchors(domain)) == 2  # 每域只留两条
 
@@ -128,7 +153,7 @@ def test_each_load_returns_a_fresh_object() -> None:
     """调用方改了它不该影响下一次调用（连跑 N 次共用一个进程）。"""
     first = load_package_json("full")
     first["anchors"].clear()
-    assert len(load_package_json("full")["anchors"]) == 61
+    assert len(load_package_json("full")["anchors"]) == 60
 
 
 def test_unknown_tier_fails_loudly() -> None:
@@ -190,3 +215,117 @@ def test_cost_anchor_is_the_price_times_this_household_area(
     assert cost.provenance is not None and price.provenance is not None
     assert cost.provenance.source == price.provenance.source  # 依据标注印的是单价的出处
     assert cost.source is not None and cost.source.startswith("求值线按「单价 × 量」算出")
+
+
+def test_share_anchor_is_the_part_over_the_total_crosswise() -> None:
+    """占比条目（``lkp-share-*``）＝分项金额 ÷ 合计金额，**两端交叉、按 1 个百分点取整**。
+
+    用户裁决 2026-09-09：占比由算得不由搜得。求值线 ``RulebookEvaluator.projectWorkItemShare``
+    （backend 533aa06）：``min = 分项 min ÷ 合计 max``、``max = 分项 max ÷ 合计 min``，除的是
+    取整后的金额落点，再按 ``share_round_to``（水电人工声明为 1）取整到整数百分点；
+    ``unit`` 硬编 ``%``；
+    ``provenance.source`` 是分子与分母两条单价资产的外部出处拼起来（分母前缀「合计来源：」）；
+    可核性取两条资产的交集、时效窗取两窗的交。考卷上占比与两笔金额对不上就红。
+    """
+    package = load_package("full")
+    by_id = {a.lkp_id: a for a in package.anchors}
+    part = by_id["lkp-cost-hydro-labor-sqm"]
+    total = by_id["lkp-cost-hardfit-total-sqm"]
+    share = by_id["lkp-share-hydro-labor-sqm"]
+    assert isinstance(part.value, dict) and isinstance(total.value, dict)
+    assert share.value == {
+        "min": round(part.value["min"] / total.value["max"] * 100),
+        "max": round(part.value["max"] / total.value["min"] * 100),
+    }
+    assert share.unit == "%" and share.value_kind == "range"
+    assert share.basis_tag == part.basis_tag == total.basis_tag
+    assert share.calibration == "calibrated" == part.calibration == total.calibration
+    assert share.provenance is not None and part.provenance is not None
+    assert total.provenance is not None
+    assert share.provenance.source == (
+        f"{part.provenance.source}；合计来源：{total.provenance.source}"
+    )
+    assert part.provenance.effective_from and total.provenance.effective_from
+    assert part.provenance.effective_to and total.provenance.effective_to
+    assert share.provenance.effective_from == max(
+        part.provenance.effective_from, total.provenance.effective_from
+    )
+    assert share.provenance.effective_to == min(
+        part.provenance.effective_to, total.provenance.effective_to
+    )
+    assert share.source is not None
+    assert share.source.startswith("求值线按「分项金额 ÷ 合计金额」算出")
+
+
+# 档位单价：backend ``rulebook-seeds/budget/attributes.yaml`` 里 ``attr-price-hardfit-total-sqm``
+# 的 ``grade_breakdown``（533aa06，键为 tier 闭集名，只有档一维、不分城市）
+HARDFIT_GRADE_PRICE_PER_SQM: dict[str, tuple[int, int]] = {
+    "low": (800, 1200),
+    "medium": (1200, 1800),
+    "high": (2000, 3000),
+}
+
+
+def test_grade_cost_anchor_is_each_grade_price_times_this_household_area() -> None:
+    """三档合计（``lkp-cost-hardfit-total-sqm-by-grade``）＝各档单价 × 建筑面积，按百元取整。
+
+    求值线从单价资产自带的 ``grade_breakdown`` 派生（backend 533aa06）：``valueKind`` 是 ``tier``、
+    三档各一个区间，两端各自乘不交叉，再按单价资产的 ``cost_round_to``（100）取整；``unit`` 硬编
+    ``元``；``name`` = 单价资产名 + ``分三档合计``；出处、时效、可核性照单价条目。
+    "三档差在哪"只由这三个区间说，不引用任何搜来的倍数（退役的 lkp-budget-tier-gap 就是那种）。
+    """
+    package = load_package("full")
+    by_id = {a.lkp_id: a for a in package.anchors}
+    price = by_id["lkp-price-hardfit-total-sqm"]
+    graded = by_id["lkp-cost-hardfit-total-sqm-by-grade"]
+    area = package.anonymous_profile.building_area_sqm
+    assert area is not None
+
+    def to_yuan(unit_price: float) -> int:
+        return int(round(round(unit_price * area) / 100) * 100)
+
+    assert graded.value == {
+        grade: {"min": to_yuan(low), "max": to_yuan(high)}
+        for grade, (low, high) in HARDFIT_GRADE_PRICE_PER_SQM.items()
+    }
+    assert graded.unit == "元" and graded.value_kind == "tier"
+    assert graded.name == price.name + "分三档合计"
+    assert graded.basis_tag == price.basis_tag and graded.calibration == price.calibration
+    assert graded.provenance is not None and price.provenance is not None
+    assert graded.provenance.source == price.provenance.source
+    assert graded.provenance.effective_from == price.provenance.effective_from
+    assert graded.provenance.effective_to == price.provenance.effective_to
+    assert graded.source is not None
+    assert graded.source.startswith("求值线按「各档单价 × 量」算出")
+
+
+def test_budget_assertion_budget_hangs_on_derived_anchors_only() -> None:
+    """造价域断言预算的 ``requires`` 逐字照业务侧 ``budget/persona.yaml``（backend 533aa06）。
+
+    退役的三条搜来的占比参数（lkp-budget-share / lkp-budget-driver / lkp-budget-tier-gap）
+    不许再出现在任何题目的支点里；占比与"哪一项最吃钱"挂全部五条 lkp-share-*，其中四条现在是缺口
+    ——这两个题目在考卷上**自然无背书**，平面接通后自然有，不是考卷漏了什么。
+    """
+    package = load_package("full")
+    persona = package.personas_by_domain["budget"][0]
+    by_predicate = {a["predicate"]: list(a["requires"]) for a in persona.assertion_budget}
+    shares = [
+        "lkp-share-demolition",
+        "lkp-share-electrical-point",
+        "lkp-share-custom-cabinet",
+        "lkp-share-hydro-labor-sqm",
+        "lkp-share-wall-paint",
+    ]
+    assert by_predicate["眼下能算出的钱"] == [
+        "lkp-cost-hydro-labor-sqm",
+        "lkp-cost-hardfit-total-sqm",
+    ]
+    assert by_predicate["各分项占比"] == shares
+    assert by_predicate["哪一项最吃钱"] == shares
+    assert by_predicate["三档差在哪"] == ["lkp-cost-hardfit-total-sqm-by-grade"]
+    retired = {"lkp-budget-share", "lkp-budget-driver", "lkp-budget-tier-gap"}
+    for requires in by_predicate.values():
+        assert not retired & set(requires)
+    known = {a.lkp_id for a in package.anchors} | {g.lkp_id for g in package.gaps}
+    for requires in by_predicate.values():
+        assert set(requires) <= known  # 每个支点要么有值要么是缺口，没有凭空的 id

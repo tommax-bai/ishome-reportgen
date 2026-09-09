@@ -47,7 +47,8 @@ def test_spec_carries_the_package_and_its_own_domains() -> None:
     args = parse_args(["--tier", "full"])
     spec, package = build_spec("full", args)
     assert spec["domains"] == package.domains
-    assert spec["package"]["gaps"] == []
+    # 齐全档自带 4 条求值线自记的缺口（量还没有的分项占比，2026-09-09 起），不是考卷抹掉的
+    assert len(spec["package"]["gaps"]) == 4
     assert spec["max_rewrites"] == 2
     assert guard_package(package) == []
 

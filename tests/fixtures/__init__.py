@@ -28,19 +28,23 @@ release 一变、种子一改，卷子就换了——"整册四跑一成"这种�
 
 ## 三档分别是什么
 
-同一户人家、同一批 61 条落点，**只差上游算出来了几条**——所以三档之间可比：
+同一户人家、同一批 64 条落点（60 条有值 + 4 条求值线自己记的缺口），**只差上游算出来了几条**
+——所以三档之间可比：
 
-- ``full`` **齐全档**：61 条全给值，0 缺口。上游把该给的量都给全了。
-- ``partial-gaps`` **部分缺档**：58 条有值 + 3 条缺口。就是 2026-08-31 那次六章整册真跑
-  的形状（缺口的 ``reason``/``detail`` 逐字来自那次真跑，只补了当时还没有的 ``basisTag``）。
-- ``mostly-gaps`` **大量缺档**：12 条有值（每域 2 条）+ 49 条缺口。测"上游给得很少时
+- ``full`` **齐全档**：60 条有值 + 4 条缺口。上游把该给的量都给全了；那 4 条缺口**不是考卷造的**，
+  是求值线的真实行为（backend 533aa06，2026-09-09）：声明了 ``share_of`` 但量还没有的四个分项
+  （定制柜/拆除/墙面涂刷/水电点位）记 gap「等平面出来按量算」——占比由算得不由搜得，量缺就是缺。
+- ``partial-gaps`` **部分缺档**：58 条有值 + 6 条缺口（上面 4 条 + 2026-08-31 那次六章整册真跑
+  没算出来的 2 条，后者的 ``reason``/``detail`` 逐字来自那次真跑，只补了当时还没有的
+  ``basisTag``）。
+- ``mostly-gaps`` **大量缺档**：12 条有值（每域 2 条）+ 52 条缺口。测"上游给得很少时
   我们怎么应对"——按规则 4.18 宁薄勿撑，缺口只作为"别编它"的禁令下发，不作为可写的题材。
 
 ## 为什么只存一个 JSON、另两档由这里派生
 
 三份 JSON 之间 90% 是同一批 persona / cr- 判据 / 禁词表，存三份的代价是"改一处要改三遍"，
 真源就劈成了三处。故：**齐全档是存下来的那份**（``upstream-package-full.json``，
-取自一次真跑的 activity 入参 + 三条 mock 落点），另两档由本模块按两张**声明式**表派生
+取自一次真跑的 activity 入参 + 两条 mock 落点），另两档由本模块按两张**声明式**表派生
 ——差异是"哪几条被抹掉"，这句话比 90% 的重复文本更容易看懂也更容易改。派生是纯函数，
 同一个提交跑出来的三档逐字相同。
 """
@@ -75,23 +79,27 @@ MOCK_MARK = "【MOCK fixture，禁止入库】"
 
 _FULL_PACKAGE_PATH = Path(__file__).parent / "upstream-package-full.json"
 
-MOCK_ANCHOR_IDS: frozenset[str] = frozenset(
-    {"lkp-rug-size-rule", "lkp-storage-total-meters", "lkp-budget-driver"}
-)
-"""齐全档里**我们造出来的**那三条落点（其余 58 条：55 条取自真跑，值是求值线自己算的；
+MOCK_ANCHOR_IDS: frozenset[str] = frozenset({"lkp-rug-size-rule", "lkp-storage-total-meters"})
+"""齐全档里**我们造出来的**那两条落点（其余 58 条：53 条取自真跑，值是求值线自己算的；
 1 条单价 ``lkp-price-hardfit-total-sqm`` 照业务侧种子 ``attr-price-hardfit-total-sqm``
 （backend e48d8ed）按考卷城市档取值；
 2 条金额 ``lkp-cost-hydro-labor-sqm`` / ``lkp-cost-hardfit-total-sqm`` 按求值线
-``projectWorkItemCost`` 的算法从单价 × 建筑面积派生、形态逐字段照它——它们不是 mock，
-考卷上金额与单价对不上时 test_upstream_fixtures 会红）。
+``projectWorkItemCost`` 的算法从单价 × 建筑面积派生、形态逐字段照它；
+1 条占比 ``lkp-share-hydro-labor-sqm``（金额 ÷ 合计，两端交叉、取整到 1 个百分点）与
+1 条三档合计 ``lkp-cost-hardfit-total-sqm-by-grade``（各档单价 × 建筑面积，到百元）照求值线
+``projectWorkItemShare`` / 三档派生的输出原样（backend 533aa06）——这四条都不是 mock，
+考卷上它们与单价、面积对不上时 test_upstream_fixtures 会红）。
 
-它们与"部分缺档里那三条缺口"是同一批**不是巧合**：真跑里求值线算不出来的，正好就是要造
-齐全档时不得不 mock 的那三条。两档因此是同一件事的两面——上游算出来了 / 上游没算出来。
+它们与"部分缺档里比齐全档多出来的那两条缺口"是同一批**不是巧合**：真跑里求值线算不出来的，
+正好就是要造齐全档时不得不 mock 的那两条。两档因此是同一件事的两面——上游算出来了 / 上游没算出来。
+第三条 mock ``lkp-budget-driver`` 曾在这里，2026-09-09 随「占比由算得不由搜得」裁决退役
+（连同 ``lkp-budget-share`` / ``lkp-budget-tier-gap`` 两条搜来的占比参数），不再下发、也不记 gap。
 """
 
 _REAL_GAPS: dict[str, dict[str, str]] = {
-    # 2026-08-31 那次六章整册真跑里，求值线真的没算出来的三条：reason/detail 逐字照抄，
-    # 一个字都不改（它是那次真跑的证据）。
+    # 2026-08-31 那次六章整册真跑里，求值线真的没算出来的三条里还在下发的两条：reason/detail
+    # 逐字照抄，一个字都不改（它是那次真跑的证据）。第三条 lkp-budget-driver 已退役
+    # （见 MOCK_ANCHOR_IDS）。
     # **basisTag 不写在这儿**：当时求值线还没发这个字段，而它现在是必填（缺了整包解析失败，
     # 见 models.GapRecord）——缺口切不回自己那个域，整册缺口就会群发给每一章。补的办法是
     # 从这条落点在齐全档里的 basisTag 直接取（见 :func:`_withhold`）：同一条落点的域只有
@@ -104,19 +112,18 @@ _REAL_GAPS: dict[str, dict[str, str]] = {
         "reason": "formula_not_implemented",
         "detail": "Σ 各柜体投影沿墙长度（从定稿平面 gen-evaluated 求得）",
     },
-    "lkp-budget-driver": {
-        "reason": "formula_not_implemented",
-        "detail": "占比最高且量可变的分项（通常为定制延米或主材档位）",
-    },
 }
 
 _KEPT_IN_MOSTLY_GAPS: dict[str, tuple[str, str]] = {
     # 大量缺档里每域留下来的两条。选法有判据，不是随手挑的：**一条整条引用（single/range，
-    # 一个匿名项）+ 一条分项（scenario/component/dimension/comparison）**——这样"上游给得少"
+    # 一个匿名项）+ 一条分项（scenario/tier/component/dimension/comparison）**——这样"上游给得少"
     # 测的是量少，而不是把某一种值形态整个从卷子上拿掉（那会连带把一半的引用语法一起停测）。
     # 有 calibrated 落点的域优先留 calibrated 的：断言预算得有东西背书，否则整章只剩坦白，
     # 测出来的是"没得写"而不是"给得少时怎么写"。
-    "budget": ("lkp-price-custom-cabinet", "lkp-budget-share"),
+    # budget 的分项原是 lkp-budget-share（component），2026-09-09 退役后换成三档合计
+    # lkp-cost-hardfit-total-sqm-by-grade（tier，calibrated）：本域剩下的分项形态只有它与 draft 的
+    # lkp-budget-confidence-width 两条，按"有 calibrated 优先留 calibrated"取它
+    "budget": ("lkp-price-custom-cabinet", "lkp-cost-hardfit-total-sqm-by-grade"),
     "ergonomics": ("lkp-counter-height", "lkp-shower-clear"),
     "lighting": ("lkp-cct-living", "lkp-illuminance-living"),
     "material": ("lkp-material-variety-max", "lkp-material-tier-gap"),
@@ -167,9 +174,10 @@ def _withhold(
     ``known_gaps`` 里有的按真跑原话写（reason/detail 逐字），没有的按 ``missing_input`` 写、
     ``detail`` 带 MOCK 标记说明它是 fixture 抹掉的——**detail 不进 prompt**（只有 reason 进），
     所以在这里做标记不会把 "fixture" 这个词喂给写作器。
+    齐全档自带的缺口（求值线自己记的那几条）原样保留、抹掉的追加在后面。
     """
     kept: list[dict[str, Any]] = []
-    gaps: list[dict[str, Any]] = []
+    gaps: list[dict[str, Any]] = list(package["gaps"])
     for anchor in package["anchors"]:
         lkp_id = anchor["lkpId"]
         if lkp_id not in lkp_ids:

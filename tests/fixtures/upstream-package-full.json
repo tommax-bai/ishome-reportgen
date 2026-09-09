@@ -180,120 +180,6 @@
       "presentation": "REFERENCE_ONLY"
     },
     {
-      "lkpId": "lkp-budget-driver",
-      "name": "造价里最吃钱的一项",
-      "numberClass": "analysis",
-      "unit": "%",
-      "valueKind": "component",
-      "value": {
-        "custom-cabinet": {
-          "min": 28,
-          "max": 34
-        },
-        "main-material": {
-          "min": 21,
-          "max": 27
-        },
-        "mep": {
-          "min": 11,
-          "max": 15
-        }
-      },
-      "referencePlane": null,
-      "basisTag": "budget@v12",
-      "source": "【MOCK fixture，禁止入库】按本落点公式「占比最高且量可变的分项」算；输入取 mock 定稿平面：定制柜投影 18.6㎡、水电点位 96 个",
-      "calibration": "draft",
-      "degraded": true,
-      "provenance": {
-        "source": "【MOCK fixture，禁止入库】按本落点公式「占比最高且量可变的分项」算；输入取 mock 定稿平面：定制柜投影 18.6㎡、水电点位 96 个",
-        "effectiveFrom": null,
-        "effectiveTo": null,
-        "calibration": "draft",
-        "annotationRequired": true
-      },
-      "presentation": "REFERENCE_ONLY"
-    },
-    {
-      "lkpId": "lkp-budget-share",
-      "name": "分项造价占比带",
-      "numberClass": "analysis",
-      "unit": "%",
-      "valueKind": "component",
-      "value": {
-        "painting": {
-          "max": 10,
-          "min": 5
-        },
-        "demolition": {
-          "max": 8,
-          "min": 3
-        },
-        "main-material": {
-          "max": 35,
-          "min": 20
-        },
-        "soft-furnishing": {
-          "max": 20,
-          "min": 8
-        },
-        "custom-cabinetry": {
-          "max": 35,
-          "min": 20
-        },
-        "masonry-carpentry": {
-          "max": 25,
-          "min": 15
-        },
-        "plumbing-electrical": {
-          "max": 15,
-          "min": 8
-        }
-      },
-      "referencePlane": null,
-      "basisTag": "budget@v12",
-      "source": "首个外部粗锚（run-2026-08-28，口径=总预算含家电，与本表七分项口径不同不换算）：硬装≈50%［45,60］/软装［25,30］/家电［20,25］——住小帮 7000562159881028127 与 7000575444755939854（硬50/软30/家电20）+ 房天下 bj_968686（硬:软:人工 2:1:1，分母口径异）；定制归属两源不一（软装内 60% vs 独立 25%）记源生口径。'水电:泥木:油漆=2:3:5' 疑为摘要错配（油漆占最大不合常理），不采",
-      "calibration": "draft",
-      "degraded": true,
-      "provenance": {
-        "source": "首个外部粗锚（run-2026-08-28，口径=总预算含家电，与本表七分项口径不同不换算）：硬装≈50%［45,60］/软装［25,30］/家电［20,25］——住小帮 7000562159881028127 与 7000575444755939854（硬50/软30/家电20）+ 房天下 bj_968686（硬:软:人工 2:1:1，分母口径异）；定制归属两源不一（软装内 60% vs 独立 25%）记源生口径。'水电:泥木:油漆=2:3:5' 疑为摘要错配（油漆占最大不合常理），不采",
-        "effectiveFrom": null,
-        "effectiveTo": null,
-        "calibration": "draft",
-        "annotationRequired": true
-      },
-      "presentation": "REFERENCE_ONLY"
-    },
-    {
-      "lkpId": "lkp-budget-tier-gap",
-      "name": "三档情景价差带",
-      "numberClass": "analysis",
-      "unit": "倍",
-      "valueKind": "comparison",
-      "value": {
-        "medium-vs-low": {
-          "max": 1.8,
-          "min": 1.3
-        },
-        "high-vs-medium": {
-          "max": 2.2,
-          "min": 1.4
-        }
-      },
-      "referencePlane": null,
-      "basisTag": "budget@v12",
-      "source": "首个外部粗锚（run-2026-08-27）：公开行情整装档位 简装 1000-1500 / 精装 2000-2500 / 豪装 3000+ 元/㎡（土巴兔 z349188 等）→ 精/简 ≈1.7-2.0、豪/精 ≥1.2，与本区间部分重叠",
-      "calibration": "draft",
-      "degraded": true,
-      "provenance": {
-        "source": "首个外部粗锚（run-2026-08-27）：公开行情整装档位 简装 1000-1500 / 精装 2000-2500 / 豪装 3000+ 元/㎡（土巴兔 z349188 等）→ 精/简 ≈1.7-2.0、豪/精 ≥1.2，与本区间部分重叠",
-        "effectiveFrom": null,
-        "effectiveTo": null,
-        "calibration": "draft",
-        "annotationRequired": true
-      },
-      "presentation": "REFERENCE_ONLY"
-    },
-    {
       "lkpId": "lkp-cct-living",
       "name": "起居与卧室色温",
       "numberClass": "selection",
@@ -473,6 +359,40 @@
       "presentation": "THESIS_SUPPORT"
     },
     {
+      "lkpId": "lkp-cost-hardfit-total-sqm-by-grade",
+      "name": "硬装全包行情单价（按建筑面积计价口径）分三档合计",
+      "numberClass": "analysis",
+      "unit": "元",
+      "valueKind": "tier",
+      "value": {
+        "low": {
+          "min": 88000,
+          "max": 132000
+        },
+        "medium": {
+          "min": 132000,
+          "max": 198000
+        },
+        "high": {
+          "min": 220000,
+          "max": 330000
+        }
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "求值线按「各档单价 × 量」算出（档位是单价资产自带的三档，只有档一维、不分城市）：档位单价 low 800–1200 / medium 1200–1800 / high 2000–3000 元/㎡ × building_area_sqm 110.0 ＝ low 88000–132000 / medium 132000–198000 / high 220000–330000，取整到 100 元 ＝ low 88000–132000 / medium 132000–198000 / high 220000–330000。三档差在哪只由这三个区间说，不引用任何搜来的倍数。",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "土巴兔装修大学 to8to.com/yezhu/z338598.html（2025-11-04，取数 2026-09-08）：「一线城市普通住宅硬装报价每平方米约1000-3000元，二线城市则在800-2000元区间波动」；同文转载于新浪 k.sina.com.cn/article_7857141524_1d452771401901wi28.html（2026-04-15）",
+        "effectiveFrom": "2026-09-08",
+        "effectiveTo": "2026-12-08",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
       "lkpId": "lkp-cost-hydro-labor-sqm",
       "name": "水电改造人工费（按建筑面积计价口径）合计",
       "numberClass": "analysis",
@@ -484,7 +404,7 @@
       },
       "referencePlane": null,
       "basisTag": "budget@v12",
-      "source": "求值线按「单价 × 量」算出：单价 60–68 元/㎡（城市档 一线）× building_area_sqm 110.0。单价是经验条目、区间本身就宽，故金额区间随之宽。",
+      "source": "求值线按「单价 × 量」算出：单价 60–68 元/㎡（城市档 一线）× building_area_sqm 110.0 ＝ 6600–7480，取整到 100 元 ＝ 6600–7500。单价是经验条目、区间本身就宽，故金额区间随之宽。",
       "calibration": "calibrated",
       "degraded": false,
       "provenance": {
@@ -1156,6 +1076,30 @@
       "presentation": "REFERENCE_ONLY"
     },
     {
+      "lkpId": "lkp-share-hydro-labor-sqm",
+      "name": "水电改造人工费占全屋硬装花费的比例",
+      "numberClass": "analysis",
+      "unit": "%",
+      "valueKind": "range",
+      "value": {
+        "min": 2,
+        "max": 7
+      },
+      "referencePlane": null,
+      "basisTag": "budget@v12",
+      "source": "求值线按「分项金额 ÷ 合计金额」算出（两端各自算：min＝分项 min ÷ 合计 max，max＝分项 max ÷ 合计 min）：水电改造人工费（按建筑面积计价口径）合计 6600–7500 元 ÷ 硬装全包行情单价（按建筑面积计价口径）合计 110000–330000 元 ＝ 2–6.82%，取整到 1 % ＝ 2–7。两边都是宽区间，占比区间随之宽；不引用任何公开行情里\"大家装修时的占比\"。",
+      "calibration": "calibrated",
+      "degraded": false,
+      "provenance": {
+        "source": "图纸之家 tuzhizhijia.com/fangchan/8468（2023 全国 43 份水电报价：上海 60/北京 68/深广 68/天津 58/长沙武汉 55/渝蓉 35/贵州 25-35/金华 50/杭州 40-50）；合计来源：土巴兔装修大学 to8to.com/yezhu/z338598.html（2025-11-04，取数 2026-09-08）：「一线城市普通住宅硬装报价每平方米约1000-3000元，二线城市则在800-2000元区间波动」；同文转载于新浪 k.sina.com.cn/article_7857141524_1d452771401901wi28.html（2026-04-15）",
+        "effectiveFrom": "2026-09-08",
+        "effectiveTo": "2026-11-28",
+        "calibration": "calibrated",
+        "annotationRequired": false
+      },
+      "presentation": "THESIS_SUPPORT"
+    },
+    {
       "lkpId": "lkp-shower-clear",
       "name": "淋浴房内空",
       "numberClass": "analysis",
@@ -1508,7 +1452,32 @@
     }
   ],
   "withheldAnchors": [],
-  "gaps": [],
+  "gaps": [
+    {
+      "lkpId": "lkp-share-custom-cabinet",
+      "basisTag": "budget@v12",
+      "reason": "missing_input",
+      "detail": "等平面出来按量算：这一项的量还没有，金额算不出，占比也就没有"
+    },
+    {
+      "lkpId": "lkp-share-demolition",
+      "basisTag": "budget@v12",
+      "reason": "missing_input",
+      "detail": "等平面出来按量算：这一项的量还没有，金额算不出，占比也就没有"
+    },
+    {
+      "lkpId": "lkp-share-electrical-point",
+      "basisTag": "budget@v12",
+      "reason": "missing_input",
+      "detail": "等平面出来按量算：这一项的量还没有，金额算不出，占比也就没有"
+    },
+    {
+      "lkpId": "lkp-share-wall-paint",
+      "basisTag": "budget@v12",
+      "reason": "missing_input",
+      "detail": "等平面出来按量算：这一项的量还没有，金额算不出，占比也就没有"
+    }
+  ],
   "personasByDomain": {
     "budget": [
       {
@@ -1534,20 +1503,34 @@
         "assertionBudget": [
           {
             "requires": [
-              "lkp-budget-share"
+              "lkp-cost-hydro-labor-sqm",
+              "lkp-cost-hardfit-total-sqm"
+            ],
+            "predicate": "眼下能算出的钱"
+          },
+          {
+            "requires": [
+              "lkp-share-demolition",
+              "lkp-share-electrical-point",
+              "lkp-share-custom-cabinet",
+              "lkp-share-hydro-labor-sqm",
+              "lkp-share-wall-paint"
             ],
             "predicate": "各分项占比"
           },
           {
             "requires": [
-              "lkp-budget-share",
-              "lkp-budget-driver"
+              "lkp-share-demolition",
+              "lkp-share-electrical-point",
+              "lkp-share-custom-cabinet",
+              "lkp-share-hydro-labor-sqm",
+              "lkp-share-wall-paint"
             ],
             "predicate": "哪一项最吃钱"
           },
           {
             "requires": [
-              "lkp-budget-tier-gap"
+              "lkp-cost-hardfit-total-sqm-by-grade"
             ],
             "predicate": "三档差在哪"
           },
