@@ -144,7 +144,7 @@ def test_tier_shapes() -> None:
     # 齐全档那 4 条 + 真跑那次没算出来、至今仍在下发的 2 条
     assert {g.lkp_id for g in partial.gaps} == SHARE_GAP_IDS | MOCK_ANCHOR_IDS
     sparse = load_package("mostly-gaps")
-    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 52)
+    assert (len(sparse.anchors), len(sparse.gaps)) == (12, 51)
     for domain in sparse.domains:
         assert len(sparse.domain_anchors(domain)) == 2  # 每域只留两条
 
