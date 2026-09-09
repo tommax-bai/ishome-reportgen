@@ -39,6 +39,7 @@ from reportgen_worker.gate import (
     BOUND_ROOTS_BY_SIDE,
     BOUND_SIDE_NAME,
     BOUND_WORD_RE,
+    BUDGET_DOMAIN,
     CHINESE_NUMBER_RE,
     DIGIT_RE,
     PLACEHOLDER_RE,
@@ -46,6 +47,7 @@ from reportgen_worker.gate import (
     THESIS_SUPPORT,
     banned_terms_block,
     bound_expectation,
+    waiting_cost_gaps,
 )
 from reportgen_worker.models import (
     Card,
@@ -434,6 +436,17 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         if request.claims
         else ""
     )
+    # 造价章（规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09 占比由算得不由搜得）：讲钱那张卡的
+    # 那一个记号就是总价，水电、三档进正文逐条；"等平面"那张卡没有占比可写——量没有，占比就是空。
+    budget_discipline = (
+        "8a. 这是造价章：讲「眼下算得出的钱」那张卡，主旨句里那**一个记号放总价**"
+        "（全屋硬装合计那一条），水电人工、分三档的总价、算出来的占比全进正文逐条给；"
+        "讲「等平面才算得出」那张卡**不写任何占比**，逐项说缺的是什么量、单价现在是多少"
+        "（引对应单价条目的记号），并明说「这几项的占比等平面出来按量算」；"
+        "包里没算出来的占比一个都不许写——占比只由算得，不由行情文章里搜得；\n"
+        if request.claims and request.domain == BUDGET_DOMAIN
+        else ""
+    )
     pairs = judgment_pairs(request.persona, request.banned_terms)
     samples = (
         "这个域里，同一件事这么写不行、这么写才对：\n"
@@ -479,6 +492,7 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "关于这家人的事实**只有「这家人的情况」那一行给的几条**，那儿没写的"
         "（房龄、家庭成员、生活习惯、哪儿有什么设备）一个都不许写；\n"
         f"{claims_discipline}"
+        f"{budget_discipline}"
         f"{samples}"
         "输出：JSON 数组，每个元素 "
         '{"thesis": 主旨句, "body": 正文, "number_refs": [引用的 lkp- 列表], '
@@ -486,7 +500,23 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
         "不要输出数组以外的任何内容。"
     )
     anchor_lines = [_anchor_line(a, request.banned_terms) for a in request.anchors]
-    gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in request.gaps]
+    other_gaps = request.gaps
+    waiting_part = ""
+    if request.domain == BUDGET_DOMAIN:
+        # 造价章的缺口分两堆：金额缺而单价在的是"等平面"那张卡的题材（规则 5.15 v2.13 允许坦白
+        # "等平面出来按量算"），其余退回通用口径（没有值就不写）。
+        waiting, other_gaps = waiting_cost_gaps(request.gaps, {a.lkp_id for a in request.anchors})
+        if waiting:
+            waiting_part = (
+                "这几笔钱**要等平面出来才算得出**（量还没有，单价在下面的落点里）——讲它们的那张卡："
+                "逐项说缺的是什么量、引它的单价记号说单价现在是多少，**不写任何占比**，"
+                "明说「这几项的占比等平面出来按量算」；这几条本身没有值，不许引它们的记号、不许编数：\n"
+                + "\n".join(
+                    f"- {gap.lkp_id}（{gap.reason}）→ 单价记号 {{{price_id}}}"
+                    for gap, price_id in waiting
+                )
+            )
+    gap_lines = [f"- {g.lkp_id}：{g.reason}" for g in other_gaps]
     user_parts = [
         f"领域：{request.domain}",
         "这家人的情况（匿名）："
@@ -502,6 +532,8 @@ def build_messages(request: WriterRequest) -> list[dict[str, str]]:
             )
         )
     user_parts.append("可引用的落点对象：\n" + "\n".join(anchor_lines))
+    if waiting_part:
+        user_parts.append(waiting_part)
     if request.unbacked_predicates:
         # 坦白语域（规则 4.18 v2.5，用户裁决 2026-08-29 晚选 B）：原口径"可以描述现象，不能给判断"
         # 实测把模型逼进元语言与伪因果（"拆除量直接挤压定制柜投影面积的可布设范围"——机制是编的；

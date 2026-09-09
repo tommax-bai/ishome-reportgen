@@ -40,6 +40,7 @@ from collections.abc import Sequence
 from reportgen_worker.models import (
     ITEM_NAME_RE,
     Card,
+    GapRecord,
     NarrativeClaim,
     Page,
     ProvenanceNote,
@@ -118,6 +119,45 @@ CHINESE_NUMBER_RE = re.compile(
 
 THESIS_SUPPORT = "THESIS_SUPPORT"
 CALIBRATED = "calibrated"
+
+# 造价域的条目命名空间（前缀即命名空间，规则 1.7）。金额＝单价 × 这家的量、占比＝金额 ÷ 总价
+# （规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09：占比由算得不由搜得）——三类前缀分别是
+# 求值线派生的金额、派生的占比、单价资产投影。推导与写作两步都按这三类分派"这章讲什么"，
+# 而两步互不可见（import-linter 同层兄弟），常量落在它们共同的下层。
+BUDGET_DOMAIN = "budget"
+COST_ID_PREFIX = "lkp-cost-"
+SHARE_ID_PREFIX = "lkp-share-"
+PRICE_ID_PREFIX = "lkp-price-"
+
+
+def price_id_of_cost(cost_id: str) -> str:
+    """金额条目对应的单价条目 id：``lkp-cost-X`` ↔ ``lkp-price-X``（金额＝单价 × 量的派生命名）。
+
+    金额求不出（量等平面）时，它的单价条目照样在包里——"哪几项要等平面出来才算得出"那件事
+    要挂的正是这条单价。
+    """
+    return PRICE_ID_PREFIX + cost_id[len(COST_ID_PREFIX) :]
+
+
+def waiting_cost_gaps(
+    gaps: Sequence[GapRecord], anchor_ids: set[str]
+) -> tuple[list[tuple[GapRecord, str]], list[GapRecord]]:
+    """把缺口分成两堆：**等平面的金额**（金额缺、单价在）与其余。
+
+    前者是造价章要讲的第二件事（规则 5.15 v2.13：量缺的分项占比为空，坦白"等平面出来按量算"），
+    后者退回通用口径（没有值就不写，规则 4.18）。判据是结构的：缺口 id 是 ``lkp-cost-`` 且对应的
+    ``lkp-price-`` 条目在本域落点里——不靠猜"这条缺口像不像金额"。
+    """
+    waiting: list[tuple[GapRecord, str]] = []
+    rest: list[GapRecord] = []
+    for gap in gaps:
+        price_id = price_id_of_cost(gap.lkp_id) if gap.lkp_id.startswith(COST_ID_PREFIX) else ""
+        if price_id and price_id in anchor_ids:
+            waiting.append((gap, price_id))
+        else:
+            rest.append(gap)
+    return waiting, rest
+
 
 # 打回话的形态（用户裁决 2026-08-30）：**每一处打回都要带上被打回的原文与原因**，
 # 且**简洁**——"避免给重写的模型造成过多负担"。射程是所有裁判场（规则层这一份、判官层那一份
@@ -1283,7 +1323,7 @@ def _cost_anchor_unused_violations(
     它在包里却不进正文＝把最要紧的一句留给了写手的取舍。判据：每条 ``lkp-cost-`` 条目
     都至少被一张卡引用（记号或 ``number_refs``），缺哪条报哪条。
     """
-    cost_ids = sorted(a.lkp_id for a in domain_anchors if a.lkp_id.startswith("lkp-cost-"))
+    cost_ids = sorted(a.lkp_id for a in domain_anchors if a.lkp_id.startswith(COST_ID_PREFIX))
     if not cost_ids:
         return []
     referenced: set[str] = set()

@@ -22,6 +22,7 @@ from reportgen_worker.gate import (
 )
 from reportgen_worker.models import (
     Card,
+    GapRecord,
     NarrativeClaim,
     PersonaAsset,
     ReportDataPackage,
@@ -619,3 +620,31 @@ def test_thesis_takes_one_token_and_body_does_not_echo_it() -> None:
     assert "**里面最多放一个记号**" in system
     assert "其余的数全放正文，一条一句、逐条给" in system
     assert "正文开头把主旨句再抄一遍" in system
+
+
+def test_budget_writer_puts_the_total_in_the_thesis_and_keeps_shares_off_the_waiting_card() -> None:
+    """造价章写作侧（规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09）：讲钱那张卡的那一个记号是总价，
+    水电、三档进正文逐条；"等平面"那张卡不写任何占比、明说等平面出来按量算。
+
+    等平面的金额缺口配它的单价记号进 prompt（金额缺、单价在），不再走"一个字都不要提"那段——
+    这一章恰恰要为它写一张卡。别的域这两段都不出现。
+    """
+    request = copy.deepcopy(_tier_request("full", "budget"))
+    request.claims = [
+        NarrativeClaim(claim="按面积眼下先能算出来几笔", anchors=["lkp-cost-hardfit-total-sqm"]),
+        NarrativeClaim(claim="几项要等平面", anchors=["lkp-price-demolition"]),
+    ]
+    request.gaps = [
+        GapRecord(lkp_id="lkp-cost-demolition", basis_tag="budget@v12", reason="missing_input")
+    ]
+    system, user = (m["content"] for m in build_messages(request))
+    assert "**一个记号放总价**" in system
+    assert "水电人工、分三档的总价、算出来的占比全进正文逐条给" in system
+    assert "**不写任何占比**" in system and "这几项的占比等平面出来按量算" in system
+    assert "**里面最多放一个记号**" in system, "主旨句最多一个记号那条不变"
+    assert "要等平面出来才算得出" in user
+    assert "- lkp-cost-demolition（missing_input）→ 单价记号 {lkp-price-demolition}" in user
+    assert "不许为它单独写一张卡" not in user
+
+    other = build_messages(_tier_request("full", "ergonomics"))[0]["content"]
+    assert "一个记号放总价" not in other and "等平面" not in other

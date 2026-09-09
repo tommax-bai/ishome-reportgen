@@ -539,3 +539,146 @@ def test_cost_anchor_not_claimed_gets_a_claim_appended_by_the_system() -> None:
         ' {"claim": "水电这笔钱按这家的面积已经能算出来", "anchors": ["lkp-cost-hydro-labor-sqm"]}]'
     )
     assert len(parse_claims(raw_ok, known, must_claim_ids=["lkp-cost-hydro-labor-sqm"])) == 2
+
+
+# ---------------------------------------------------------------------------
+# 造价章推导限三件事（规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09：占比由算得不由搜得）
+# ---------------------------------------------------------------------------
+
+BUDGET_ANCHORS = [
+    AnchorBrief(lkp_id="lkp-cost-hardfit-total-sqm", name="硬装全包合计", unit="元"),
+    AnchorBrief(lkp_id="lkp-cost-hydro-labor-sqm", name="水电改造人工费合计", unit="元"),
+    AnchorBrief(
+        lkp_id="lkp-cost-hardfit-by-grade",
+        name="硬装三档总价",
+        unit="元",
+        items=["basic", "medium", "premium"],
+    ),
+    AnchorBrief(lkp_id="lkp-share-hydro-of-total", name="水电占总价", unit="%"),
+    AnchorBrief(lkp_id="lkp-price-hardfit-total-sqm", name="硬装全包行情单价", unit="元/㎡"),
+    AnchorBrief(lkp_id="lkp-price-hydro-labor-sqm", name="水电改造人工费", unit="元/㎡"),
+    AnchorBrief(lkp_id="lkp-price-demolition", name="墙体拆除", unit="元/㎡"),
+    AnchorBrief(lkp_id="lkp-price-electrical-point", name="水电点位", unit="元/点位"),
+    AnchorBrief(lkp_id="lkp-price-wall-paint", name="墙面乳胶漆涂刷", unit="元/㎡"),
+    AnchorBrief(lkp_id="lkp-price-custom-cabinet", name="定制柜", unit="元/投影㎡"),
+]
+"""退役三条占比参数之后造价域包里剩的形态：单价、金额、派生占比、三档总价（缺口另给）。"""
+
+WAITING_GAPS = [
+    GapRecord(lkp_id="lkp-cost-demolition", basis_tag="budget@v12", reason="missing_input"),
+    GapRecord(lkp_id="lkp-cost-electrical-point", basis_tag="budget@v12", reason="missing_input"),
+    GapRecord(lkp_id="lkp-cost-wall-paint", basis_tag="budget@v12", reason="missing_input"),
+    GapRecord(lkp_id="lkp-cost-custom-cabinet", basis_tag="budget@v12", reason="missing_input"),
+]
+"""四个量等平面：拆改㎡、水电点位数、涂刷面积、定制柜投影面积——金额缺、单价在。"""
+
+
+def _budget_request(gaps: list[GapRecord] | None = None) -> DeriveRequest:
+    return DeriveRequest(
+        domain="budget",
+        identity="你是这家人的造价顾问。",
+        anchors=BUDGET_ANCHORS,
+        gaps=WAITING_GAPS if gaps is None else gaps,
+        profile=PACKAGE.anonymous_profile,
+        backed_predicates=["各工项单价行情"],
+        unbacked_predicates=[],
+    )
+
+
+def test_budget_derivation_lists_three_things_in_order() -> None:
+    """造价章的三件事按序进 prompt，每件事下面贴的条目 id 是按包算出来的。
+
+    ① 眼下算得出的钱＝全部金额（含三档总价）+ 派生占比；② 等平面的＝缺口配它的单价条目、说清缺的
+    是什么量；③ 其余单价。缺口全部归进第②件时，通用"不许为它单独写一张卡"那段不再出现——
+    这一章恰恰要为它写一张卡（坦白"等平面出来按量算"，规则 5.15 v2.13）。
+    """
+    system, user = (m["content"] for m in build_derive_messages(_budget_request()))
+    assert "最多三条，多了会被打回" in system
+    assert "通常三到五件" not in system
+
+    first, second, third = (user.index(mark) for mark in ("① ", "② ", "③ "))
+    assert first < second < third
+    money_part, waiting_part, price_part = user[first:second], user[second:third], user[third:]
+    for cost_id in (
+        "lkp-cost-hardfit-total-sqm",
+        "lkp-cost-hydro-labor-sqm",
+        "lkp-cost-hardfit-by-grade",
+        "lkp-share-hydro-of-total",
+    ):
+        assert cost_id in money_part, f"{cost_id} 该挂在第①件事"
+    assert "分 3 项" in money_part, "三档总价分三项要标出来"
+    assert "lkp-cost-demolition：缺的量＝㎡" in waiting_part
+    assert "lkp-cost-electrical-point：缺的量＝点位" in waiting_part
+    assert "lkp-cost-custom-cabinet：缺的量＝投影㎡" in waiting_part
+    assert "lkp-price-demolition" in waiting_part and "现在就有，挂它" in waiting_part
+    assert "等平面出来按量算" in waiting_part and "占比一个字都不写" in waiting_part
+    assert "lkp-price-hardfit-total-sqm" in price_part
+    assert "lkp-price-hydro-labor-sqm" in price_part
+    assert "lkp-price-demolition" not in price_part, "配给第②件的单价不再进第③件"
+    assert "不许为它单独写一张卡" not in user
+
+
+def test_budget_gap_without_a_unit_price_falls_back_to_the_generic_gap_block() -> None:
+    """缺口不是金额、或它的单价也不在包里，不属于第②件事——退回"没有值就不写"那段。"""
+    odd = GapRecord(lkp_id="lkp-budget-confidence-width", basis_tag="budget@v12", reason="x")
+    user = build_derive_messages(_budget_request(gaps=[*WAITING_GAPS, odd]))[1]["content"]
+    assert "② 等平面才算得出的项：这轮没有" not in user
+    assert "不许为它单独写一张卡" in user
+    assert "- lkp-budget-confidence-width：x" in user
+    assert "- lkp-cost-demolition：missing_input" not in user, "等平面的金额不进通用缺口段"
+
+
+def test_budget_without_waiting_gaps_says_the_second_thing_is_skipped() -> None:
+    user = build_derive_messages(_budget_request(gaps=[]))[1]["content"]
+    assert "② 等平面才算得出的项：这轮没有，这件事不讲" in user
+    assert "lkp-price-demolition" in user[user.index("③ ") :]
+
+
+def test_non_budget_domain_keeps_its_own_count_rule_and_no_agenda() -> None:
+    system, user = (m["content"] for m in build_derive_messages(request_for()))
+    assert "通常三到五件" in system
+    assert "最多三条" not in system
+    assert "这一章的三件事" not in user
+
+
+def _claims(n: int) -> str:
+    return json.dumps(
+        [{"claim": f"第{'一二三四五'[i]}件事的取舍在这里", "anchors": []} for i in range(n)],
+        ensure_ascii=False,
+    )
+
+
+def test_budget_rejects_a_fourth_claim_and_carries_the_draft() -> None:
+    """上限在 parse_claims 判（prompt 里"最多三条"只是叮嘱）；打回带原稿，射程同其他裁判场。"""
+    with pytest.raises(DeriverOutputError) as e:
+        parse_claims(_claims(4), set(), domain="budget")
+    assert "只讲三件事" in str(e.value) and "4 条" in str(e.value)
+    assert len(e.value.claims) == 4
+    assert len(parse_claims(_claims(3), set(), domain="budget")) == 3
+
+
+def test_claim_limit_is_budget_only() -> None:
+    assert len(parse_claims(_claims(4), set(), domain="ergonomics")) == 4
+    assert len(parse_claims(_claims(5), set())) == 5
+
+
+def test_budget_unclaimed_cost_ids_merge_into_the_first_claim() -> None:
+    """金额没挂仍由系统保证挂上，但造价域**并进第①件**而不是另开一条——另开会顶破上限。"""
+    known = {a.lkp_id for a in BUDGET_ANCHORS}
+    must = ["lkp-cost-hardfit-total-sqm", "lkp-cost-hydro-labor-sqm", "lkp-cost-hardfit-by-grade"]
+    raw = (
+        '[{"claim": "按面积眼下先能算出来一笔", "anchors": ["lkp-cost-hardfit-total-sqm"]},'
+        ' {"claim": "几项要等平面", "anchors": ["lkp-price-demolition"]},'
+        ' {"claim": "单价口径是行情价", "anchors": ["lkp-price-hydro-labor-sqm"]}]'
+    )
+    claims = parse_claims(raw, known, must_claim_ids=must, domain="budget")
+    assert len(claims) == 3
+    assert claims[0].anchors == must
+    assert all(c.claim != COST_CLAIM_TEXT for c in claims)
+
+    raw_ok = raw.replace(
+        '"anchors": ["lkp-cost-hardfit-total-sqm"]',
+        '"anchors": ["lkp-cost-hardfit-total-sqm", "lkp-cost-hydro-labor-sqm",'
+        ' "lkp-cost-hardfit-by-grade"]',
+    )
+    assert parse_claims(raw_ok, known, must_claim_ids=must, domain="budget")[0].anchors == must

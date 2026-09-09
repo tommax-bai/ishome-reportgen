@@ -36,10 +36,14 @@ import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from reportgen_worker.gate import (
+    BUDGET_DOMAIN,
     CHINESE_NUMBER_RE,
+    COST_ID_PREFIX,
     DIGIT_RE,
+    SHARE_ID_PREFIX,
     banned_route_of,
     banned_terms_block,
+    waiting_cost_gaps,
 )
 from reportgen_worker.models import (
     AnchorBrief,
@@ -104,6 +108,14 @@ class DeriveRequest(BaseModel):
 
 
 COST_CLAIM_TEXT = "按你家的建筑面积，眼下已经能先算出来的几笔钱"
+
+CLAIM_LIMIT_BY_DOMAIN: dict[str, int] = {BUDGET_DOMAIN: 3}
+"""按域的主张数上限。**只有造价域有**（规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09）。
+
+造价章的三件事是定死的（眼下算得出的钱／等平面才算得出的／单价口径），多出来的主张只能是
+把这三件事拆散或把占比类题目硬讲成判断——八跑五次打回"占比类题目背书不足不许下判断"、
+三次"五六张卡都引单价、跨卡重复句"，两种打回都是主张数没上限的产物。别的域仍按"真有几件事"定。
+"""
 
 
 class DeriverOutputError(Exception):
@@ -205,9 +217,8 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         "不许绕着它作描述性分析，不许发明因果去填（「A 挤压 B」「随 X 耦合」这类都是编的）。"
         "**坦白只许用于这些题目和「求不出的落点」清单**：清单之外的落点都有算好的值，"
         "把有值的落点说成「给不出数」是被禁止的隐藏——值多软都要照讲，软的自会带标注；\n"
-        "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
-        "不要为了铺满而拆出没有取舍的主张；\n"
-        f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）——{banned}\n"
+        + _how_many_things(request.domain)
+        + f"6. 这些词一个都不能出现（下一步要照着你的主张写，你用了它就会被机检打回）——{banned}\n"
         "**落点的题名里就带着其中一些**——带了的那几条已在下面逐行标出来。"
         "题名是内部标签不是说法，你在主张里要换成业主读得懂的话；\n"
         '输出：JSON 数组，每个元素 {"claim": 主张, "anchors": [用到的落点 id]}，'
@@ -257,18 +268,100 @@ def build_derive_messages(request: DeriveRequest) -> list[dict[str, str]]:
         )
     if request.feedback:
         user_parts.append(_rewrite_part(request))
-    if request.gaps:
+    other_gaps = request.gaps
+    if request.domain == BUDGET_DOMAIN:
+        agenda, other_gaps = _budget_agenda(request)
+        user_parts.append(agenda)
+    if other_gaps:
         user_parts.append(
             "这几条落点这次**没有值**。正文里一个字都不要提，**也不许为它单独写一张卡**——\n"
             "报告是一次性交付物，交到业主手上就是最终稿，里头不该有「以后再算给你」这种态：\n"
             "既不许写成「等你确认」「等你提供」，也不许写成「我们下一步补给你」。\n"
             "讲不了的就不讲（规则 4.18 宁薄勿撑）。也不许编数、不许绕着它作分析：\n"
-            + "\n".join(f"- {g.lkp_id}：{g.reason}" for g in request.gaps)
+            + "\n".join(f"- {g.lkp_id}：{g.reason}" for g in other_gaps)
         )
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": "\n\n".join(user_parts)},
     ]
+
+
+def _how_many_things(domain: str) -> str:
+    """纪律第 5 条"讲几件事"：通用域按"真有几件事"，造价域**定死三件、按序**。
+
+    造价章三件事的内容与顺序在用户段（:func:`_budget_agenda`，条目 id 是按包算出来贴上去的），
+    这里只给数量与"多了打回"——上限由 :func:`parse_claims` 确定性校验，不靠这句叮嘱。
+    """
+    if CLAIM_LIMIT_BY_DOMAIN.get(domain) is None:
+        return (
+            "5. 讲几件事由这一域真有几件事决定——通常三到五件。宁可少讲一件讲透，"
+            "不要为了铺满而拆出没有取舍的主张；\n"
+        )
+    return (
+        "5. 这一章**只讲三件事、按下面「这一章的三件事」给的顺序讲**，一件事一条主张，"
+        "**最多三条，多了会被打回**；哪件事下面没列条目就不讲那件，别硬凑；"
+        "占比这种东西**只讲包里算出来的**（下面第一件事里列了的），没列的一个字都不许说；\n"
+    )
+
+
+def _quantity_of(unit: str | None) -> str:
+    """单价量纲的分母就是它缺的那个量：``元/㎡`` → ㎡、``元/点位`` → 点位。"""
+    if unit and "/" in unit:
+        return unit.split("/", 1)[1]
+    return "量"
+
+
+def _budget_agenda(request: DeriveRequest) -> tuple[str, list[GapRecord]]:
+    """造价章的三件事（规则 5.15 第 2 节 v2.13，用户裁决 2026-09-09：占比由算得不由搜得）。
+
+    ① 眼下按面积已经能先算出来的钱——挂全部金额条目（``lkp-cost-*``，含三档总价）与派生占比
+      （``lkp-share-*``）；
+    ② 哪几项要等平面出来才算得出——挂缺口里"金额缺、单价在"的那几条对应的单价条目，
+      每项讲清缺的是什么量（单价量纲的分母）；
+    ③ 单价现在是多少、什么口径——其余单价条目。
+
+    条目 id 逐条按包算出来贴在各件事下面（数据驱动，不是让模型自己归类）。返回值第二项是
+    **不属于第②件**的缺口（缺口不是金额、或单价也不在包里），退回通用"没有值就不写"那段。
+    """
+    anchor_ids = {a.lkp_id for a in request.anchors}
+    by_id = {a.lkp_id: a for a in request.anchors}
+    money = [
+        a
+        for a in request.anchors
+        if a.lkp_id.startswith(COST_ID_PREFIX) or a.lkp_id.startswith(SHARE_ID_PREFIX)
+    ]
+    waiting, other_gaps = waiting_cost_gaps(request.gaps, anchor_ids)
+    taken = {a.lkp_id for a in money} | {price_id for _, price_id in waiting}
+    prices = [a for a in request.anchors if a.lkp_id not in taken]
+
+    def brief(a: AnchorBrief) -> str:
+        items = f"，分 {len(a.items)} 项" if a.items else ""
+        return f"{a.lkp_id}（{a.name}{items}）"
+
+    lines = [
+        "这一章的三件事（**按这个顺序**，一件事一条主张；每件事下面列的条目就挂在那条主张上）：",
+        "① 眼下按你家的建筑面积**已经能先算出来的钱**——这一条挂下面**全部**条目"
+        "（合计的钱、分三档的总价、算出来的占比都在这里，一条都别漏）："
+        + ("、".join(brief(a) for a in money) if money else "（这轮一条都没有，这件事不讲）"),
+    ]
+    if waiting:
+        lines.append(
+            "② **哪几项要等平面出来才算得出**——这几项的钱这轮没有值，缺的是量，"
+            "单价现在就有：这条主张挂它们的**单价条目**，逐项说清缺的是什么量；"
+            "它们的占比一个字都不写，只许说「等平面出来按量算」；不许编数："
+        )
+        lines.extend(
+            f"  - {gap.lkp_id}：缺的量＝{_quantity_of(by_id[price_id].unit)}"
+            f"（{gap.reason}）；单价条目 {brief(by_id[price_id])} 现在就有，挂它"
+            for gap, price_id in waiting
+        )
+    else:
+        lines.append("② 等平面才算得出的项：这轮没有，这件事不讲。")
+    lines.append(
+        "③ **单价现在是多少、什么口径**——其余单价条目挂这一条："
+        + ("、".join(brief(a) for a in prices) if prices else "（没有剩下的单价条目，这件事不讲）")
+    )
+    return "\n".join(lines), other_gaps
 
 
 def _rule_line(rule: TriggeredRule) -> str:
@@ -290,6 +383,7 @@ def parse_claims(
     item_names: Sequence[str] = (),
     banned_groups: Mapping[str, list[str]] | None = None,
     must_claim_ids: Sequence[str] = (),
+    domain: str = "",
 ) -> list[NarrativeClaim]:
     """解析主张集，并**剔除推导步自造的落点 id**（保留主张本身）。
 
@@ -318,6 +412,16 @@ def parse_claims(
     if not cleaned:
         raise DeriverOutputError(
             "推导没有产出任何主张",
+            claims=cleaned,
+        )
+    # 主张数上限（只有造价域有，见 CLAIM_LIMIT_BY_DOMAIN）：三件事是定死的，第四条只能是拆散
+    # 或硬讲占比——prompt 里"最多三条"是叮嘱，这里才是判。
+    limit = CLAIM_LIMIT_BY_DOMAIN.get(domain)
+    if limit is not None and len(cleaned) > limit:
+        raise DeriverOutputError(
+            f"这一章只讲三件事，写了 {len(cleaned)} 条主张——按「这一章的三件事」合并："
+            "眼下算得出的钱一条、等平面才算得出的一条、单价口径一条，多出来的并进去，"
+            "不许把占比单独拆成一条",
             claims=cleaned,
         )
     # 数字：推导步纪律第 2 条明写"不许出现任何数字"，此前**只在 prompt 里叮嘱、没有校验**——
@@ -399,7 +503,13 @@ def parse_claims(
     # 主张句是固定的事实句（gen-locked 一类），数仍由写作步从记号取、渲染层从包取。
     claimed = {aid for c in cleaned for aid in c.anchors}
     unclaimed = [aid for aid in must_claim_ids if aid not in claimed]
-    if unclaimed:
+    if unclaimed and limit is not None:
+        # 有上限的域（造价）第一条主张就是"眼下算得出的钱"：没挂的并进它，不另开一条——
+        # 另开会顶破上限，且那本来就是同一件事。第一条已挂全部金额时 unclaimed 为空，什么都不动。
+        logger.warning("推导没挂金额条目，并进第一条主张：%s", unclaimed)
+        first = cleaned[0]
+        cleaned[0] = first.model_copy(update={"anchors": [*first.anchors, *unclaimed]})
+    elif unclaimed:
         logger.warning("推导没挂金额条目，系统追加主张：%s", unclaimed)
         cleaned.append(NarrativeClaim(claim=COST_CLAIM_TEXT, anchors=list(unclaimed)))
     return cleaned
@@ -436,5 +546,6 @@ class LlmNarrativeDeriver:
             request.triggered_rules,
             [item for a in request.anchors for item in a.items],
             request.banned_term_groups,
-            [a.lkp_id for a in request.anchors if a.lkp_id.startswith("lkp-cost-")],
+            [a.lkp_id for a in request.anchors if a.lkp_id.startswith(COST_ID_PREFIX)],
+            domain=request.domain,
         )
