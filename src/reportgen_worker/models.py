@@ -208,6 +208,15 @@ class CheckExample(_PackageModel):
     fixed: str
 
 
+# cr- 判据的状态字（规则 4.17 入册门禁第二道）。**词表只写在这一处**：两层执行器各自按它挑判据——
+# 规则层 :func:`reportgen_worker.gate.pattern_checks`、
+# 判官层 :func:`reportgen_worker.judge.judge_checks`。
+# 两份同名常量分居两个模块，改判时必然改一处忘一处（同 cr-bound-word-before-placeholder 那条的账）。
+OBSERVING = "observing"
+ACTIVE = "active"
+RETIRED = "retired"
+
+
 class CheckAsset(_PackageModel):
     """cr- 判据（规则 4.10b 纪律形态）：release 数据物化执行，不硬编码。
 
@@ -216,6 +225,10 @@ class CheckAsset(_PackageModel):
     ``status`` 是规则 4.17 入册门禁第二道的开关——``observing`` 只记录不拦截、``active`` 命中即违规、
     ``retired`` 停用。**代码里没有"要不要拦"的分支**，拦截权只能由 release 数据授予。
     V4 之前的快照无此二字段，缺省 = 空样例 + observing（无拦截权，安全方向）。
+
+    ``retired`` 两层都不执行（规则 4.10d，2026-09-09 用户裁决收窄"gate 忽略 status"）：
+    判官层见 :func:`reportgen_worker.judge.judge_checks`，
+    规则层见 :func:`reportgen_worker.gate.pattern_checks`。
     """
 
     asset_id: str

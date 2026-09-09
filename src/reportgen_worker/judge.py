@@ -34,6 +34,8 @@ import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from reportgen_worker.models import (
+    ACTIVE,
+    RETIRED,
     Card,
     CheckAsset,
     EvaluationProfile,
@@ -55,10 +57,6 @@ QUOTE_TRIM = " \t\r\n“”\"'『』「」…。，、"
 _STANDARD_CITATION_RE = re.compile(
     r"(?:GB\s*/?\s*T?\s*\d[\d.\-–—]*|JGJ\s*/?\s*T?\s*\d[\d.\-–—]*|ISO\s*\d+|EN\s*\d+)"
 )
-
-OBSERVING = "observing"
-ACTIVE = "active"
-RETIRED = "retired"
 
 JUDGE_BATCH_SIZE = 6
 """判官每批送审的卡片数。

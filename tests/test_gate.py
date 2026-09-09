@@ -15,6 +15,7 @@ from reportgen_worker.gate import (
     banned_route_of,
     banned_terms_block,
     collect_banned_terms,
+    pattern_checks,
     required_provenance_notes,
     run_package_gate,
     run_unit_gate,
@@ -595,6 +596,79 @@ def test_release_check_pattern_executed() -> None:
     """cr- 判据是 release 数据：包内 cr-weak-words 的 pattern 被物化执行。"""
     card = Card(thesis="这里可能可以再看看。", body="建议考虑一下。", number_refs=[])
     assert "cr-weak-words" in checks_of(run_unit_gate([card], "ergonomics", PACKAGE))
+
+
+# ---------------------------------------------------------------------------
+# 判据状态字在规则层的射程（规则 4.10d，用户裁决 2026-09-09 收窄"gate 忽略 status"）：
+# 挑判据那一步要读 status——``retired`` 不跑，``active``／``observing`` 照跑照拦。
+# 修之前这里只看 pattern 存不存在，于是"退役"在本层是假的：判官层不再送审的判据，规则层照旧逐字拦。
+# ---------------------------------------------------------------------------
+
+PROBE_PATTERN = "探针词"
+PROBE_CARD = Card(thesis="主通道要走得开。", body="这里写了探针词。", number_refs=[])
+
+
+def package_with_check(**fields: Any) -> ReportDataPackage:
+    """在 ergonomics 域塞一条 cr- 判据（字段照生产方下发形态逐条写死，不改真数据）。"""
+    raw = copy.deepcopy(PACKAGE_JSON)
+    raw["checksByDomain"]["ergonomics"].append(
+        {
+            "assetId": "cr-probe",
+            "checkType": "regex_deny",
+            "scope": ["正文"],
+            "message": "探针判据（单测夹具）",
+            "decidedBy": "单测夹具",
+            "version": 1,
+            **fields,
+        }
+    )
+    return ReportDataPackage.model_validate(raw)
+
+
+def test_retired_pattern_check_is_not_executed() -> None:
+    """``retired`` 带着 pattern 也不跑——停用即不再执行，与判官层同口径。
+
+    立案：判官层 ``judge_checks`` 一直认 status、规则层不认，同一条判据"退役"了半边。
+    数据侧一直在手工绕：``cr-unit-translation`` 退役时把 pattern 一并摘掉，理由逐字写在种子注释里
+    ——"留着 pattern 的 retired 行会继续拦截，等于没退役"。摘 pattern 不该是退役的必要动作。
+    """
+    package = package_with_check(pattern=PROBE_PATTERN, status="retired")
+    assert "cr-probe" not in [c.asset_id for c in pattern_checks("ergonomics", package)]
+    assert "cr-probe" not in checks_of(run_unit_gate([PROBE_CARD], "ergonomics", package))
+
+
+def test_active_pattern_check_runs_beside_a_retired_one() -> None:
+    """认 status **不等于** pattern 判据整体停跑：同一份包里 active 的照拦、retired 的不拦。
+
+    没有这一条，"规则层一条 pattern 判据都不跑"也能让上一条测试变绿——那是把门全拆了。
+    """
+    package = package_with_check(pattern=PROBE_PATTERN, status="retired")
+    card = Card(thesis="这里可能可以再看看。", body="建议考虑一下探针词。", number_refs=[])
+    fired = checks_of(run_unit_gate([card], "ergonomics", package))
+    assert "cr-weak-words" in fired
+    assert "cr-probe" not in fired
+
+
+def test_observing_pattern_check_still_intercepts() -> None:
+    """``observing`` 在规则层**不静音**（规则 4.10d 射程未收窄，本次只收 retired 那一半）。
+
+    本层没有"记录但不拦"的通道——判官层有（观察落 ledger、blocking 空则 verdict 不受影响），
+    规则层的唯一出口就是 Violation。把 observing 读成"跑但不拦"在这里只能实现成"不跑"，
+    那等于用观察态给确定性拦截静音，规则 4.17 门禁二的触发率统计当场失真。
+    """
+    package = package_with_check(pattern=PROBE_PATTERN, status="observing")
+    assert "cr-probe" in checks_of(run_unit_gate([PROBE_CARD], "ergonomics", package))
+
+
+def test_pattern_check_without_status_keeps_intercepting() -> None:
+    """没写 status 的照跑照拦：模型缺省 ``observing``（V4 之前的快照，``CheckAsset``）。
+
+    发版数据侧的缺省是另一个数——``import_seeds.py`` 不写 status 即 ``active``（规则层判据都不写）。
+    两个缺省不同源但同向，都落在"照拦"，故老快照不会因为本次改动被静默拆门。
+    """
+    package = package_with_check(pattern=PROBE_PATTERN)
+    assert package.checks_by_domain["ergonomics"][-1].status == "observing"
+    assert "cr-probe" in checks_of(run_unit_gate([PROBE_CARD], "ergonomics", package))
 
 
 # ---------------------------------------------------------------------------

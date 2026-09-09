@@ -28,8 +28,9 @@
   **明确不做的**：判断句的语义识别——"这句话算不算判断句"没有确定性判据，机检不假实现。
   未声明 assertions 却写成判断句、参考口吻被写成断言口吻，全部归**判官层**（分域反例库，
   图 v0.2 §3 出口过检·判官层）。本层只保证"声明了就必须有背书"，不保证"没声明就不是断言"。
-- **cr- 判据（release 数据物化执行）**：随报告数据包下发的 checks 中带 pattern 的文本级判据
-  逐条跑；无 pattern 的类型（count_max/cross_field 等）本层暂不执行。
+- **cr- 判据（release 数据物化执行）**：随报告数据包下发的 checks 中带 pattern **且未退役**的
+  文本级判据逐条跑（:func:`pattern_checks`）；无 pattern 的类型（count_max/cross_field 等）本层
+  暂不执行。
 """
 
 from __future__ import annotations
@@ -39,7 +40,9 @@ from collections.abc import Sequence
 
 from reportgen_worker.models import (
     ITEM_NAME_RE,
+    RETIRED,
     Card,
+    CheckAsset,
     GapRecord,
     NarrativeClaim,
     Page,
@@ -461,6 +464,39 @@ def judgment_good_texts(domain: str, package: ReportDataPackage) -> list[str]:
             if isinstance(good, str) and len(good.strip()) >= MIN_SAMPLE_LENGTH:
                 texts.append(good.strip())
     return sorted(set(texts))
+
+
+def pattern_checks(domain: str, package: ReportDataPackage) -> list[CheckAsset]:
+    """本域规则层判据：带 ``pattern`` 且**未退役**的（``status != retired``）。
+
+    形态照判官层 :func:`reportgen_worker.judge.judge_checks`
+    （那边是 ``c.examples and c.status != RETIRED``）：挑判据的那一步就是读 status 的那一步。
+
+    三档在本层各是什么行为：
+
+    - ``retired`` **不跑**——停用即不再执行，留档只为可回滚（判官层同口径）。**本次修的就是这一条**：
+      此前这里只看 ``pattern`` 存不存在、完全不读 status，于是"退役"在本层是假的——判官层已不再送审
+      的一条判据，规则层照旧逐字拦。数据侧一直在手工绕：``cr-unit-translation`` 退役时
+      （2026-09-08）把 ``pattern`` 一并摘掉，理由逐字写在种子注释里——"留着 pattern 的 retired 行
+      会继续拦截，等于没退役"。修完之后，摘 pattern 不再是退役的必要动作。
+    - ``active`` 跑，命中即违规——本层只有这一条出口，:class:`~reportgen_worker.models.Violation`
+      直接进重写反馈／failed verdict。
+    - ``observing`` **照跑照拦，不做静音**（规则 4.10d 明文，射程未变）：观察态只作用于判官层。
+      本层没有"记录但不拦"的通道（判官层有：观察落 ledger、``blocking`` 空则 verdict 不受影响），
+      把 observing 读成"跑但不拦"在这里只能实现成"不跑"，那等于用观察态给确定性拦截静音——
+      规则 4.17 门禁二的触发率统计当场失真，正是 4.10d 禁的那件事。规则层判据恒 ``active`` 由结构
+      保证（核验写死"带反例样例者必须 observing"，规则层判据不带样例），故 observing + pattern
+      这个组合在发版数据里本就不该出现；真出现了，本层的处置是**照拦**而不是装作没有。
+      缺 status 的老快照缺省即 ``observing``（:class:`~reportgen_worker.models.CheckAsset`），
+      因此也照跑——与 V4 之前快照里 pattern 判据本就在拦的事实一致。
+
+    2026-09-09 立案：《评审/检测规则清单-哪些真在跑》照出的是反面——21 条标着 active 却没有执行
+    路径；这一条是正面——以为拆了门、门还在。当天退役的 17 条恰好无 pattern 也无 examples，
+    没出事是侥幸，不是机制拦住的。
+    """
+    return [
+        c for c in package.checks_by_domain.get(domain, []) if c.pattern and c.status != RETIRED
+    ]
 
 
 def annotation_required_anchors(package: ReportDataPackage) -> dict[str, ReportAnchor]:
@@ -1033,7 +1069,7 @@ def run_unit_gate(
     # 一句对不上的打回等于没打回（同"指令与它描述的输入对不上"那一族）。
     usable = backed_predicates(domain, package)
     good_samples = judgment_good_texts(domain, package)
-    pattern_checks = [c for c in package.checks_by_domain.get(domain, []) if c.pattern]
+    live_pattern_checks = pattern_checks(domain, package)
 
     for index, card in enumerate(cards):
         label = f"card[{index}]"
@@ -1248,7 +1284,7 @@ def run_unit_gate(
                     )
                 )
 
-        for check in pattern_checks:
+        for check in live_pattern_checks:
             assert check.pattern is not None
             # 判据跑**原文**不跑剥占位后的文本（2026-08-29 晚改）：cr-bound-word-before-placeholder
             # 的 pattern 就是「边界词 + {lkp-」——剥掉占位符它永远打不中。原先剥占位是防 pattern
